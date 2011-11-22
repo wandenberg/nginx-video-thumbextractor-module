@@ -1,0 +1,21 @@
+nginx-video-thumbextractor-module
+
+=============
+Requirements:
+=============
+
+lib avformat
+lib avcodec
+lib swscale
+lib jpeg
+GCC, make, the usual guys
+
+
+================
+Developer Guide:
+================
+
+Install the above requirements.
+Download nginx server.
+Configure nginx using
+  ./configure --add-module=<PATH_TO_MODULE_CODE>/nginx-video-thumbextractor-module
