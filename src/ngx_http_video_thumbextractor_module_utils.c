@@ -86,7 +86,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
         goto exit;
     }
 
-    if ((width == 0) && (height == 0)) {
+    if (height == 0) {
         // keep original format
         width = pCodecCtx->width;
         height = pCodecCtx->height;
