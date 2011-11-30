@@ -8,11 +8,6 @@ static ngx_int_t ngx_http_video_thumbextractor_init_worker(ngx_cycle_t *cycle);
 
 static char *ngx_http_video_thumbextractor(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
-static ngx_str_t ngx_http_video_thumbextractor_video_filename = ngx_string("video_thumbextractor_video_filename");
-static ngx_str_t ngx_http_video_thumbextractor_video_second   = ngx_string("video_thumbextractor_video_second");
-static ngx_str_t ngx_http_video_thumbextractor_image_width    = ngx_string("video_thumbextractor_image_width");
-static ngx_str_t ngx_http_video_thumbextractor_image_height   = ngx_string("video_thumbextractor_image_height");
-
 static ngx_command_t  ngx_http_video_thumbextractor_commands[] = {
     { ngx_string("video_thumbextractor"),
       NGX_HTTP_LOC_CONF|NGX_CONF_NOARGS,
@@ -20,48 +15,72 @@ static ngx_command_t  ngx_http_video_thumbextractor_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       0,
       NULL },
+    { ngx_string("video_thumbextractor_video_filename"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_http_set_complex_value_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, video_filename),
+      NULL },
+    { ngx_string("video_thumbextractor_video_second"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_http_set_complex_value_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, video_second),
+      NULL },
+    { ngx_string("video_thumbextractor_image_width"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_http_set_complex_value_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, image_width),
+      NULL },
+    { ngx_string("video_thumbextractor_image_height"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_http_set_complex_value_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, image_height),
+      NULL },
     { ngx_string("video_thumbextractor_jpeg_baseline"),
-	  NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-	  ngx_conf_set_num_slot,
-	  NGX_HTTP_LOC_CONF_OFFSET,
-	  offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_baseline),
-	  NULL },
-	{ ngx_string("video_thumbextractor_jpeg_progressive_mode"),
-	  NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-	  ngx_conf_set_num_slot,
-	  NGX_HTTP_LOC_CONF_OFFSET,
-	  offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_progressive_mode),
-	  NULL },
-	{ ngx_string("video_thumbextractor_jpeg_optimize"),
-	  NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-	  ngx_conf_set_num_slot,
-	  NGX_HTTP_LOC_CONF_OFFSET,
-	  offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_optimize),
-	  NULL },
-	{ ngx_string("video_thumbextractor_jpeg_optimize"),
-	  NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-	  ngx_conf_set_num_slot,
-	  NGX_HTTP_LOC_CONF_OFFSET,
-	  offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_optimize),
-	  NULL },
-	{ ngx_string("video_thumbextractor_jpeg_smooth"),
-	  NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-	  ngx_conf_set_num_slot,
-	  NGX_HTTP_LOC_CONF_OFFSET,
-	  offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_smooth),
-	  NULL },
-	{ ngx_string("video_thumbextractor_jpeg_quality"),
-	  NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-	  ngx_conf_set_num_slot,
-	  NGX_HTTP_LOC_CONF_OFFSET,
-	  offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_quality),
-	  NULL },
-	{ ngx_string("video_thumbextractor_jpeg_dpi"),
-	  NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-	  ngx_conf_set_num_slot,
-	  NGX_HTTP_LOC_CONF_OFFSET,
-	  offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_dpi),
-	  NULL },
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_baseline),
+      NULL },
+    { ngx_string("video_thumbextractor_jpeg_progressive_mode"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_progressive_mode),
+      NULL },
+    { ngx_string("video_thumbextractor_jpeg_optimize"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_optimize),
+      NULL },
+    { ngx_string("video_thumbextractor_jpeg_optimize"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_optimize),
+      NULL },
+    { ngx_string("video_thumbextractor_jpeg_smooth"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_smooth),
+      NULL },
+    { ngx_string("video_thumbextractor_jpeg_quality"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_quality),
+      NULL },
+    { ngx_string("video_thumbextractor_jpeg_dpi"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_dpi),
+      NULL },
       ngx_null_command
 };
 
@@ -107,6 +126,10 @@ ngx_http_video_thumbextractor_create_loc_conf(ngx_conf_t *cf)
     }
 
     conf->enabled = NGX_CONF_UNSET;
+    conf->video_filename = NULL;
+    conf->video_second = NULL;
+    conf->image_width = NULL;
+    conf->image_height = NULL;
     conf->jpeg_baseline = NGX_CONF_UNSET_UINT;
     conf->jpeg_progressive_mode = NGX_CONF_UNSET_UINT;
     conf->jpeg_optimize = NGX_CONF_UNSET_UINT;
@@ -131,6 +154,22 @@ ngx_http_video_thumbextractor_merge_loc_conf(ngx_conf_t *cf, void *parent, void 
         return NGX_CONF_OK;
     }
 
+    if (conf->video_filename == NULL) {
+        conf->video_filename = prev->video_filename;
+    }
+
+    if (conf->video_second == NULL) {
+        conf->video_second = prev->video_second;
+    }
+
+    if (conf->image_width == NULL) {
+        conf->image_width = prev->image_width;
+    }
+
+    if (conf->image_height == NULL) {
+        conf->image_height = prev->image_height;
+    }
+
     ngx_conf_merge_uint_value(conf->jpeg_baseline, prev->jpeg_baseline, 1);
     ngx_conf_merge_uint_value(conf->jpeg_progressive_mode, prev->jpeg_progressive_mode, 0);
     ngx_conf_merge_uint_value(conf->jpeg_optimize, prev->jpeg_optimize, 100);
@@ -140,13 +179,23 @@ ngx_http_video_thumbextractor_merge_loc_conf(ngx_conf_t *cf, void *parent, void 
 
     // sanity checks
 
+    if (conf->video_filename == NULL) {
+        ngx_conf_log_error(NGX_LOG_ERR, cf, 0, "video thumbextractor module: video_thumbextractor_video_filename must be defined");
+        return NGX_CONF_ERROR;
+    }
+
+    if (conf->video_second == NULL) {
+        ngx_conf_log_error(NGX_LOG_ERR, cf, 0, "video thumbextractor module: video_thumbextractor_video_second must be defined");
+        return NGX_CONF_ERROR;
+    }
+
     return NGX_CONF_OK;
 }
 
 static ngx_int_t
 ngx_http_video_thumbextractor_init_worker(ngx_cycle_t *cycle)
 {
-	ngx_http_video_thumbextractor_init_libraries();
+    ngx_http_video_thumbextractor_init_libraries();
     return NGX_OK;
 }
 
@@ -157,33 +206,9 @@ ngx_http_video_thumbextractor(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_http_core_loc_conf_t                 *clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
     ngx_http_video_thumbextractor_loc_conf_t *vtlcf = conf;
 
-	clcf->handler = ngx_http_video_thumbextractor_handler;
+    clcf->handler = ngx_http_video_thumbextractor_handler;
 
-	vtlcf->enabled = 1;
-
-	vtlcf->index_video_filename = ngx_http_get_variable_index(cf, &ngx_http_video_thumbextractor_video_filename);
-	if (vtlcf->index_video_filename == NGX_ERROR) {
-		ngx_conf_log_error(NGX_LOG_ERR, cf, 0, "video thumbextractor module: video_thumbextractor_video_filename variable could not be defined");
-		return NGX_CONF_ERROR;
-	}
-
-	vtlcf->index_video_second = ngx_http_get_variable_index(cf, &ngx_http_video_thumbextractor_video_second);
-	if (vtlcf->index_video_second == NGX_ERROR) {
-		ngx_conf_log_error(NGX_LOG_ERR, cf, 0, "video thumbextractor module: ngx_http_video_thumbextractor_video_second variable could not be defined");
-		return NGX_CONF_ERROR;
-	}
-
-	vtlcf->index_image_width = ngx_http_get_variable_index(cf, &ngx_http_video_thumbextractor_image_width);
-	if (vtlcf->index_image_width == NGX_ERROR) {
-		ngx_conf_log_error(NGX_LOG_ERR, cf, 0, "video thumbextractor module: ngx_http_video_thumbextractor_image_width variable could not be defined");
-		return NGX_CONF_ERROR;
-	}
-
-	vtlcf->index_image_height = ngx_http_get_variable_index(cf, &ngx_http_video_thumbextractor_image_height);
-	if (vtlcf->index_image_height == NGX_ERROR) {
-		ngx_conf_log_error(NGX_LOG_ERR, cf, 0, "video thumbextractor module: ngx_http_video_thumbextractor_image_height variable could not be defined");
-		return NGX_CONF_ERROR;
-	}
+    vtlcf->enabled = 1;
 
     return NGX_CONF_OK;
 }
