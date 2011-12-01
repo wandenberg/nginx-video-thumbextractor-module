@@ -2,8 +2,10 @@
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
 #include <jpeglib.h>
+#include <wand/magick_wand.h>
 
 #define NGX_HTTP_VIDEO_THUMBEXTRACTOR_MEMORY_STEP 1024
+#define NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB         "RGB"
 
 static uint32_t     ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_conf_t *cf, uint8_t * buffer, int in_width, int in_height, int out_width, int out_height, caddr_t *out_buffer, size_t *out_len, size_t uncompressed_size, ngx_pool_t *temp_pool);
 static void         ngx_http_video_thumbextractor_jpeg_memory_dest (j_compress_ptr cinfo, caddr_t *out_buf, size_t *out_size, size_t uncompressed_size, ngx_pool_t *temp_pool);
@@ -33,6 +35,11 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     uint8_t         *buffer = NULL;
     AVPacket         packet;
     size_t           uncompressed_size;
+    float            scale = 0.0, new_scale = 0.0, scale_sws = 0.0, scale_w = 0.0, scale_h = 0.0;
+    int              sws_width = 0, sws_height = 0;
+    ngx_flag_t       needs_crop = 0;
+    MagickWand      *m_wand = NULL;
+    MagickBooleanType mrc;
 
     // Open video file
     if ((rc = av_open_input_file(&pFormatCtx, filename, NULL, 0, NULL)) != 0) {
@@ -93,8 +100,31 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     } else if (width == 0) {
         // calculate width related with original aspect
         width = height * pCodecCtx->width / pCodecCtx->height;
-        width = ((width + 8) / 16) * 16;
     }
+
+    if ((width < 16) || (height < 16)) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Very small size requested, %d x %d", width, height);
+        rc = NGX_ERROR;
+        goto exit;
+    }
+
+    scale     = (float) pCodecCtx->width / pCodecCtx->height;
+    new_scale = (float) width / height;
+
+    sws_width = width;
+    sws_height = height;
+
+    if (scale != new_scale) {
+        scale_w = (float) width / pCodecCtx->width;
+        scale_h = (float) height / pCodecCtx->height;
+        scale_sws = (scale_w > scale_h) ? scale_w : scale_h;
+
+        sws_width = pCodecCtx->width * scale_sws + 0.5;
+        sws_height = pCodecCtx->height * scale_sws + 0.5;
+
+        needs_crop = 1;
+    }
+
 
     // Allocate video frame
     pFrame = avcodec_alloc_frame();
@@ -108,12 +138,12 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     }
 
     // Determine required buffer size and allocate buffer
-    uncompressed_size = avpicture_get_size(PIX_FMT_RGB24, width, height) * sizeof(uint8_t);
+    uncompressed_size = avpicture_get_size(PIX_FMT_RGB24, sws_width, sws_height) * sizeof(uint8_t);
     buffer = (uint8_t *) av_malloc(uncompressed_size);
 
     // Assign appropriate parts of buffer to image planes in pFrameRGB
     // Note that pFrameRGB is an AVFrame, but AVFrame is a superset of AVPicture
-    avpicture_fill((AVPicture *) pFrameRGB, buffer, PIX_FMT_RGB24, width, height);
+    avpicture_fill((AVPicture *) pFrameRGB, buffer, PIX_FMT_RGB24, sws_width, sws_height);
 
     if ((rc = av_seek_frame(pFormatCtx, -1, second * AV_TIME_BASE, 0)) < 0) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Seek to an invalid time, error: %d", rc);
@@ -131,10 +161,47 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
             if (frameFinished) {
                 // Convert the image from its native format to RGB
                 struct SwsContext *img_resample_ctx = sws_getContext(pCodecCtx->width, pCodecCtx->height, pCodecCtx->pix_fmt,
-                        width, height, PIX_FMT_RGB24, SWS_BICUBIC, NULL, NULL, NULL);
+                        sws_width, sws_height, PIX_FMT_RGB24, SWS_BICUBIC, NULL, NULL, NULL);
 
-                sws_scale(img_resample_ctx, (const uint8_t * const *)pFrame->data, pFrame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
+                sws_scale(img_resample_ctx, (const uint8_t * const *) pFrame->data, pFrame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
                 sws_freeContext(img_resample_ctx);
+
+
+                if (needs_crop) {
+                    MagickWandGenesis();
+
+                    if ((m_wand = NewMagickWand()) == NULL){
+                        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not alloc MagickWand memory");
+                        rc = NGX_ERROR;
+                        goto exit;
+                    }
+
+                    mrc = MagickConstituteImage(m_wand, sws_width, sws_height, NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB, CharPixel, pFrameRGB->data[0]);
+                    if (mrc == MagickTrue) {
+                        mrc = MagickSetImageGravity(m_wand, CenterGravity);
+                    }
+
+                    if (mrc == MagickTrue) {
+                        mrc = MagickCropImage(m_wand, width, height, (sws_width-width)/2, (sws_height-height)/2);
+                    }
+
+                    if (mrc == MagickTrue) {
+                        mrc = MagickExportImagePixels(m_wand, 0, 0, width, height, NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB, CharPixel, pFrameRGB->data[0]);
+                    }
+
+                    /* Clean up */
+                    if (m_wand) {
+                        m_wand = DestroyMagickWand(m_wand);
+                    }
+
+                    MagickWandTerminus();
+
+                    if (mrc == MagickTrue) {
+                        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Error cropping image");
+                        rc = NGX_ERROR;
+                        goto exit;
+                    }
+                }
 
                 // Compress to jpeg
                 if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrameRGB->data[0], pCodecCtx->width, pCodecCtx->height, width, height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
@@ -174,6 +241,7 @@ ngx_http_video_thumbextractor_init_libraries(void)
 {
     // Register all formats and codecs
     av_register_all();
+    av_log_set_level(AV_LOG_ERROR);
 }
 
 
