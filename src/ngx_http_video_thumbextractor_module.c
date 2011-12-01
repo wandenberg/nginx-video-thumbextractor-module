@@ -38,6 +38,11 @@ ngx_http_video_thumbextractor_handler(ngx_http_request_t *r)
         height = (height != NGX_ERROR) ? height : 0;
     }
 
+    if (((width > 0) && (width < 16)) || ((height > 0) && (height < 16))) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "video thumb extractor module: Very small size requested, %d x %d", width, height);
+        return NGX_HTTP_BAD_REQUEST;
+    }
+
     if ((filename = ngx_http_video_thumbextractor_create_str(r->pool, clcf->root.len + vv_filename.len)) == NULL) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "video thumb extractor module: unable to allocate memory to store full filename");
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
