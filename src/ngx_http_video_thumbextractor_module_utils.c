@@ -26,7 +26,7 @@ ngx_http_video_thumbextractor_create_str(ngx_pool_t *pool, uint len)
 static int
 ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t *cf, const char *filename, int64_t second, ngx_uint_t width, ngx_uint_t height, caddr_t *out_buffer, size_t *out_len, ngx_pool_t *temp_pool, ngx_log_t *log)
 {
-    int              rc, videoStream, frameFinished;
+    int              rc, videoStream, frameFinished = 0;
     unsigned int     i;
     AVFormatContext *pFormatCtx = NULL;
     AVCodecContext  *pCodecCtx = NULL;
@@ -152,7 +152,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     }
 
     rc = NGX_ERROR;
-    while (av_read_frame(pFormatCtx, &packet) >= 0) {
+    while (!frameFinished && av_read_frame(pFormatCtx, &packet) >= 0) {
         // Is this a packet from the video stream?
         if (packet.stream_index == videoStream) {
             // Decode video frame
@@ -169,14 +169,17 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
 
                 if (needs_crop) {
                     MagickWandGenesis();
+                    mrc = MagickTrue;
 
                     if ((m_wand = NewMagickWand()) == NULL){
-                        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not alloc MagickWand memory");
-                        rc = NGX_ERROR;
-                        goto exit;
+                        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not allocate MagickWand memory");
+                        mrc = MagickFalse;
                     }
 
-                    mrc = MagickConstituteImage(m_wand, sws_width, sws_height, NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB, CharPixel, pFrameRGB->data[0]);
+                    if (mrc == MagickTrue) {
+                        mrc = MagickConstituteImage(m_wand, sws_width, sws_height, NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB, CharPixel, pFrameRGB->data[0]);
+                    }
+
                     if (mrc == MagickTrue) {
                         mrc = MagickSetImageGravity(m_wand, CenterGravity);
                     }
@@ -196,10 +199,10 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
 
                     MagickWandTerminus();
 
-                    if (mrc == MagickTrue) {
+                    if (mrc != MagickTrue) {
                         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Error cropping image");
-                        rc = NGX_ERROR;
-                        goto exit;
+                        /* stop the while before try to jpeg compress the image */
+                        break;
                     }
                 }
 
@@ -207,7 +210,6 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
                 if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrameRGB->data[0], pCodecCtx->width, pCodecCtx->height, width, height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
                     rc = NGX_OK;
                 }
-                break;
             }
         }
 
