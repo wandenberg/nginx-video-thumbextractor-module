@@ -24,6 +24,12 @@ This module depends from some libraries which has to be installed before it, lik
 * MagickWand - commonly distributed with "ImageMagick":http://www.imagemagick.org
 
 
+h1(#recommendation). Recommendation
+
+By default ImageMagick uses OpenMP to process images in threads.
+I recommend to configure/compile ImageMagick using the option _--disable-openmp_ since that is not a good idea use threads inside workers.
+
+
 h1(#installation). Installation
 
 Install the above requirements and follow the steps bellow.
