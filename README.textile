@@ -23,6 +23,7 @@ This module depends from some libraries which has to be installed before it, lik
 * jpeg - "libjpeg":http://libjpeg.sourceforge.net
 * MagickWand - commonly distributed with "ImageMagick":http://www.imagemagick.org
 
+*If you don't install FFmpeg from source you need to be sure that you have headers files for the libs avformat, avcodev and swscale. On Ubuntu, for example you may install libavformat-dev, libavcodec-dev and libswscale-dev packages*
 
 h1(#recommendation). Recommendation
 
