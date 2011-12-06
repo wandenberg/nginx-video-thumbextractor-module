@@ -4,7 +4,6 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
-#include <video_hash.h>
 
 typedef struct {
     ngx_http_complex_value_t               *video_filename;
