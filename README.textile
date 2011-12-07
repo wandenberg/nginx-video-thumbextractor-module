@@ -1,7 +1,7 @@
 h1(#nginx_video_thumbextractor_module). Nginx Video Thumb Extractor Module
 
 Video Thumb Extractor is a module to extract an image from a video frame from a specific second resizing/cropping it to a given size.
-The smallest generated image is 16x16 pixels.
+The smallest generated image is ==16x16== pixels.
 
 _This module is not distributed with the Nginx source. See "the installation instructions":installation._
 
@@ -15,20 +15,36 @@ This module is considered production ready.
 
 h1(#requirements). Requirements
 
-This module depends from some libraries which has to be installed before it, like:
+This module depends from some libraries (headers and shared objects) which has to be installed before it:
 
-* avformat - commonly distributed with "FFmpeg":http://ffmpeg.org
-* avcodec - commonly distributed with "FFmpeg":http://ffmpeg.org
-* swscale - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avformat >= 53.4.0 (tested versions: 53.4.0, 53.5.0) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avcodec >= 53.7.0 (tested versions: 53.7.0, 53.8.0) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* swscale >= 2.0.0 (tested versions: 2.0.0) - commonly distributed with "FFmpeg":http://ffmpeg.org
 * jpeg - "libjpeg":http://libjpeg.sourceforge.net
 * MagickWand - commonly distributed with "ImageMagick":http://www.imagemagick.org
 
-*If you don't install FFmpeg from source you need to be sure that you have headers files for the libs avformat, avcodev and swscale. On Ubuntu, for example you may install libavformat-dev, libavcodec-dev and libswscale-dev packages*
+To install FFmpeg from source with the specified versions follow the steps bellow:
+
+<pre>
+  git clone git://git.videolan.org/ffmpeg
+  cd ffmpeg
+  git checkout -b n0.8.7
+  ./configure --prefix=/usr --disable-ffserver --disable-ffplay --enable-shared
+  make clean && make
+  make install
+</pre>
+
 
 h1(#recommendation). Recommendation
 
 By default ImageMagick uses OpenMP to process images in threads.
 I recommend to configure/compile ImageMagick using the option _--disable-openmp_ since that is not a good idea use threads inside workers.
+
+
+h1(#supported_video_formats). Supported Video Formats
+
+This module uses the libraries avcodec and avformat to read the video files. Any supported video format for these libraries will work.
+Tested formats was _mp4_, _mov_ and _flv_.
 
 
 h1(#installation). Installation

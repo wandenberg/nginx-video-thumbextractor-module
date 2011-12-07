@@ -42,14 +42,18 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     MagickBooleanType mrc;
 
     // Open video file
-    if ((rc = av_open_input_file(&pFormatCtx, filename, NULL, 0, NULL)) != 0) {
+    if ((rc = avformat_open_input(&pFormatCtx, filename, NULL, NULL)) != 0) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't open file %s, error: %d", filename, rc);
-        rc = (rc == AVERROR_NOENT) ? NGX_HTTP_VIDEO_THUMBEXTRACTOR_FILE_NOT_FOUND : NGX_ERROR;
+        rc = (rc == AVERROR(NGX_ENOENT)) ? NGX_HTTP_VIDEO_THUMBEXTRACTOR_FILE_NOT_FOUND : NGX_ERROR;
         goto exit;
     }
 
     // Retrieve stream information
+#if LIBAVFORMAT_VERSION_INT <= AV_VERSION_INT(53, 5, 0)
     if (av_find_stream_info(pFormatCtx) < 0) {
+#else
+    if (avformat_find_stream_info(pFormatCtx, NULL) < 0) {
+#endif
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't find stream information");
         rc = NGX_ERROR;
         goto exit;
@@ -87,7 +91,11 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     }
 
     // Open codec
+#if LIBAVCODEC_VERSION_INT <= AV_VERSION_INT(53, 8, 0)
     if ((rc = avcodec_open(pCodecCtx, pCodec)) < 0) {
+#else
+    if ((rc = avcodec_open2(pCodecCtx, pCodec, NULL)) < 0) {
+#endif
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not open codec, error %d", rc);
         rc = NGX_ERROR;
         goto exit;
