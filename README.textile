@@ -19,6 +19,7 @@ This module depends from some libraries (headers and shared objects) which has t
 
 * avformat >= 53.4.0 (tested versions: 53.4.0, 53.5.0) - commonly distributed with "FFmpeg":http://ffmpeg.org
 * avcodec >= 53.7.0 (tested versions: 53.7.0, 53.8.0) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avutil >= 51.9.1 (tested versions: 51.9.1, 51.30.0) - commonly distributed with "FFmpeg":http://ffmpeg.org
 * swscale >= 2.0.0 (tested versions: 2.0.0) - commonly distributed with "FFmpeg":http://ffmpeg.org
 * jpeg - "libjpeg":http://libjpeg.sourceforge.net
 * MagickWand - commonly distributed with "ImageMagick":http://www.imagemagick.org
