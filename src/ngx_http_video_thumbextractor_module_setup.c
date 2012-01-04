@@ -82,12 +82,6 @@ static ngx_command_t  ngx_http_video_thumbextractor_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_optimize),
       NULL },
-    { ngx_string("video_thumbextractor_jpeg_optimize"),
-      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_num_slot,
-      NGX_HTTP_LOC_CONF_OFFSET,
-      offsetof(ngx_http_video_thumbextractor_loc_conf_t, jpeg_optimize),
-      NULL },
     { ngx_string("video_thumbextractor_jpeg_smooth"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_conf_set_num_slot,
@@ -174,11 +168,6 @@ ngx_http_video_thumbextractor_merge_loc_conf(ngx_conf_t *cf, void *parent, void 
 
     ngx_conf_merge_value(conf->enabled, prev->enabled, 0);
 
-    // if video thumb extractor is disable the other configurations don't have to be checked
-    if (!conf->enabled) {
-        return NGX_CONF_OK;
-    }
-
     if (conf->video_filename == NULL) {
         conf->video_filename = prev->video_filename;
     }
@@ -201,6 +190,11 @@ ngx_http_video_thumbextractor_merge_loc_conf(ngx_conf_t *cf, void *parent, void 
     ngx_conf_merge_uint_value(conf->jpeg_smooth, prev->jpeg_smooth, 0);
     ngx_conf_merge_uint_value(conf->jpeg_quality, prev->jpeg_quality, 75);
     ngx_conf_merge_uint_value(conf->jpeg_dpi, prev->jpeg_dpi, 72); /** Screen resolution = 72 dpi */
+
+    // if video thumb extractor is disable the other configurations don't have to be checked
+    if (!conf->enabled) {
+        return NGX_CONF_OK;
+    }
 
     // sanity checks
 
