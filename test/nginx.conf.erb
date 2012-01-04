@@ -1,0 +1,47 @@
+pid                     <%= @pid_file %>;
+error_log               <%= @main_error_log %> debug;
+# Development Mode
+master_process  <%=@master_process%>;
+daemon          <%=@daemon%>;
+worker_processes        <%=nginx_workers%>;
+
+events {
+  worker_connections  1024;
+  use                 <%= (RUBY_PLATFORM =~ /darwin/) ? 'kqueue' : 'epoll' %>;
+}
+
+http {
+  default_type    application/octet-stream;
+
+  types {
+    video/mp4                             mp4;
+    image/jpeg                            jpeg jpg;
+  }
+
+  access_log      <%= @access_log %>;
+  error_log       <%= @error_log %> debug;
+
+  server {
+    listen          <%=nginx_port%>;
+    server_name     <%=nginx_host%>;
+
+    location / {
+      <%= "video_thumbextractor;"                                           unless @thumbextractor.nil? %>
+      <%= "video_thumbextractor_video_filename        #{@video_filename};" unless @video_filename.nil? %>
+      <%= "video_thumbextractor_video_second          #{@video_second};" unless @video_second.nil? %>
+      <%= "video_thumbextractor_image_width           #{@image_width};" unless @image_width.nil? %>
+      <%= "video_thumbextractor_image_height          #{@image_height};" unless @image_height.nil? %>
+
+      <%= "video_thumbextractor_jpeg_baseline         #{@jpeg_baseline};" unless @jpeg_baseline.nil? %>
+      <%= "video_thumbextractor_jpeg_progressive_mode #{@jpeg_progressive_mode};" unless @jpeg_progressive_mode.nil? %>
+      <%= "video_thumbextractor_jpeg_optimize         #{@jpeg_optimize};" unless @jpeg_optimize.nil? %>
+      <%= "video_thumbextractor_jpeg_smooth           #{@jpeg_smooth};" unless @jpeg_smooth.nil? %>
+      <%= "video_thumbextractor_jpeg_quality          #{@jpeg_quality};" unless @jpeg_quality.nil? %>
+      <%= "video_thumbextractor_jpeg_dpi              #{@jpeg_dpi};" unless @jpeg_dpi.nil? %>
+
+      root <%= File.expand_path(File.dirname(__FILE__)) %>;
+    }
+
+    <%= @extra_location %>
+  }
+}

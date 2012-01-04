@@ -1,2 +1,4 @@
 .cproject
 .project
+test/tmp
+test/.rvmrc
