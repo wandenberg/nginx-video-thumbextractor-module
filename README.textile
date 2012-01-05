@@ -29,7 +29,7 @@ To install FFmpeg from source with the specified versions follow the steps bello
 <pre>
   git clone git://git.videolan.org/ffmpeg
   cd ffmpeg
-  git checkout -b n0.8.7
+  git checkout n0.8.7 -b tag_n0.8.7
   ./configure --prefix=/usr --disable-ffserver --disable-ffplay --enable-shared
   make clean && make
   make install
