@@ -265,7 +265,13 @@ exit:
     if (pCodecCtx != NULL) avcodec_close(pCodecCtx);
 
     // Close the video file
-    if (pFormatCtx != NULL) av_close_input_file(pFormatCtx);
+    if (pFormatCtx != NULL) {
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(53, 17, 0)
+        av_close_input_file(pFormatCtx);
+#else
+        avformat_close_input(&pFormatCtx);
+#endif
+    }
 
     return rc;
 }
