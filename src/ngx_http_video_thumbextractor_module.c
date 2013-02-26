@@ -109,5 +109,5 @@ ngx_http_video_thumbextractor_handler(ngx_http_request_t *r)
 
     ngx_http_output_filter(r, out);
 
-    return NGX_DONE;
+    return NGX_OK;
 }
