@@ -164,7 +164,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
 
     // Allocate an AVFrame structure
     pFrameRGB = avcodec_alloc_frame();
-    if ((pFrameRGB == NULL) || (pFrameRGB == NULL)) {
+    if ((pFrame == NULL) || (pFrameRGB == NULL)) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not alloc frame memory");
         rc = NGX_ERROR;
         goto exit;
