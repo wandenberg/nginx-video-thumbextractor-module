@@ -178,11 +178,13 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     // Note that pFrameRGB is an AVFrame, but AVFrame is a superset of AVPicture
     avpicture_fill((AVPicture *) pFrameRGB, buffer, PIX_FMT_RGB24, sws_width, sws_height);
 
-    if ((rc = av_seek_frame(pFormatCtx, -1, second * AV_TIME_BASE, 0)) < 0) {
+    if ((rc = av_seek_frame(pFormatCtx, -1, second * AV_TIME_BASE, cf->next_time ? 0 : AVSEEK_FLAG_BACKWARD)) < 0) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Seek to an invalid time, error: %d", rc);
         rc = NGX_HTTP_VIDEO_THUMBEXTRACTOR_SECOND_NOT_FOUND;
         goto exit;
     }
+
+    int64_t second_on_stream_time_base = second * pFormatCtx->streams[videoStream]->time_base.den / pFormatCtx->streams[videoStream]->time_base.num;
 
     rc = NGX_ERROR;
     while (!frameFinished && av_read_frame(pFormatCtx, &packet) >= 0) {
@@ -192,6 +194,12 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
             avcodec_decode_video2(pCodecCtx, pFrame, &frameFinished, &packet);
             // Did we get a video frame?
             if (frameFinished) {
+                if (!cf->only_keyframe && (pFrame->pkt_pts < second_on_stream_time_base)) {
+                    frameFinished = 0;
+                    av_free_packet(&packet);
+                    continue;
+                }
+
                 // Convert the image from its native format to RGB
                 struct SwsContext *img_resample_ctx = sws_getContext(pCodecCtx->width, pCodecCtx->height, pCodecCtx->pix_fmt,
                         sws_width, sws_height, PIX_FMT_RGB24, SWS_BICUBIC, NULL, NULL, NULL);

@@ -43,6 +43,9 @@ typedef struct {
     ngx_uint_t                              jpeg_quality;
     ngx_uint_t                              jpeg_dpi;
 
+    ngx_flag_t                              only_keyframe;
+    ngx_flag_t                              next_time;
+
     ngx_flag_t                              enabled;
 } ngx_http_video_thumbextractor_loc_conf_t;
 

@@ -167,6 +167,55 @@ describe "when getting a thumb" do
         image_1.should_not eq(image('/test_video.mp4?second=2&width=200&height=360'))
       end
     end
+
+    describe "and manipulating 'only_keyframes' and 'next_time' configurations" do
+      let!(:configuration) do
+        @extra_location = %{
+
+    location /previous {
+      rewrite "^/previous(.*)" $1 break;
+
+      video_thumbextractor;
+      video_thumbextractor_video_filename        $uri;
+      video_thumbextractor_video_second          $arg_second;
+      video_thumbextractor_next_time off;
+
+      root #{ File.expand_path(File.dirname(__FILE__)) };
+    }
+
+    location /next {
+      rewrite "^/next(.*)" $1 break;
+
+      video_thumbextractor;
+      video_thumbextractor_video_filename        $uri;
+      video_thumbextractor_video_second          $arg_second;
+
+      root #{ File.expand_path(File.dirname(__FILE__)) };
+    }
+
+    location /exact {
+      rewrite "^/exact(.*)" $1 break;
+
+      video_thumbextractor;
+      video_thumbextractor_video_filename        $uri;
+      video_thumbextractor_video_second          $arg_second;
+      video_thumbextractor_only_keyframe off;
+
+      root #{ File.expand_path(File.dirname(__FILE__)) };
+    }
+        }
+      end
+
+      it "should return different images if using next_time or not" do
+        image_1 = image('/previous/test_video.mp4?second=2')
+        image_1.should_not eq(image('/next/test_video.mp4?second=2'))
+      end
+
+      it "should return different images if you use only_keyframes or not" do
+        image_1 = image('/exact/test_video.mp4?second=2')
+        image_1.should_not eq(image('/next/test_video.mp4?second=2'))
+      end
+    end
   end
 
   describe "and module is disabled" do

@@ -52,6 +52,18 @@ static ngx_command_t  ngx_http_video_thumbextractor_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_video_thumbextractor_loc_conf_t, video_second),
       NULL },
+    { ngx_string("video_thumbextractor_only_keyframe"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, only_keyframe),
+      NULL },
+    { ngx_string("video_thumbextractor_next_time"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, next_time),
+      NULL },
     { ngx_string("video_thumbextractor_image_width"),
       NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_http_set_complex_value_slot,
@@ -155,6 +167,8 @@ ngx_http_video_thumbextractor_create_loc_conf(ngx_conf_t *cf)
     conf->jpeg_smooth = NGX_CONF_UNSET_UINT;
     conf->jpeg_quality = NGX_CONF_UNSET_UINT;
     conf->jpeg_dpi = NGX_CONF_UNSET_UINT;
+    conf->only_keyframe = NGX_CONF_UNSET_UINT;
+    conf->next_time = NGX_CONF_UNSET_UINT;
 
     return conf;
 }
@@ -191,10 +205,15 @@ ngx_http_video_thumbextractor_merge_loc_conf(ngx_conf_t *cf, void *parent, void 
     ngx_conf_merge_uint_value(conf->jpeg_quality, prev->jpeg_quality, 75);
     ngx_conf_merge_uint_value(conf->jpeg_dpi, prev->jpeg_dpi, 72); /** Screen resolution = 72 dpi */
 
+    ngx_conf_merge_value(conf->only_keyframe, prev->only_keyframe, 1);
+    ngx_conf_merge_value(conf->next_time, prev->next_time, 1);
+
     // if video thumb extractor is disable the other configurations don't have to be checked
     if (!conf->enabled) {
         return NGX_CONF_OK;
     }
+
+    conf->next_time = conf->only_keyframe ? conf->next_time : 0;
 
     // sanity checks
 
