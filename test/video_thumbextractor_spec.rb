@@ -70,7 +70,7 @@ describe "when getting a thumb" do
 
       it "should retturn different images for two different seconds" do
         image_1 = image('/test_video.mp4?second=2')
-        image_1.should_not eq(image('/test_video.mp4?second=4'))
+        image_1.should_not eq(image('/test_video.mp4?second=6'))
       end
     end
 
