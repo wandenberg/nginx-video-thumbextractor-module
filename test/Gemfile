@@ -1,6 +1,10 @@
 source "http://rubygems.org"
 
-gem "rspec", "~> 2.7.0"
-gem "ruby-debug19"
-gem "popen4"
-gem "em-http-request", "~> 0.2.14"
+gem 'rake'
+
+group :test do
+  gem 'rspec'
+  gem 'nginx_test_helper'
+  gem 'em-http-request'
+  gem 'debugger'
+end
