@@ -1,6 +1,6 @@
 ngx_addon_name=ngx_http_video_thumbextractor_module
 ngx_feature_libs="-lavformat -lavcodec -lavutil -lswscale -ljpeg -lMagickWand"
-HTTP_MODULES="$HTTP_MODULES ngx_http_video_thumbextractor_module"
+HTTP_AUX_FILTER_MODULES="$HTTP_AUX_FILTER_MODULES $ngx_addon_name"
 CORE_INCS="$CORE_INCS \
     $ngx_addon_dir/src \
     $ngx_addon_dir/include"

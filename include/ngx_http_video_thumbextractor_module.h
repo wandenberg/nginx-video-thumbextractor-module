@@ -49,7 +49,16 @@ typedef struct {
     ngx_flag_t                              enabled;
 } ngx_http_video_thumbextractor_loc_conf_t;
 
-static ngx_int_t ngx_http_video_thumbextractor_handler(ngx_http_request_t *r);
+typedef struct {
+    ngx_int_t                               second;
+    ngx_int_t                               width;
+    ngx_int_t                               height;
+    ngx_str_t                              *filename;
+} ngx_http_video_thumbextractor_ctx_t;
+
+ngx_int_t ngx_http_video_thumbextractor_access_handler(ngx_http_request_t *r);
+ngx_int_t ngx_http_video_thumbextractor_filter_init(ngx_conf_t *cf);
+
 
 static ngx_str_t NGX_HTTP_VIDEO_THUMBEXTRACTOR_CONTENT_TYPE = ngx_string("image/jpeg");
 
