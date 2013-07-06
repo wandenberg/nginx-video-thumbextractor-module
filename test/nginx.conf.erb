@@ -23,6 +23,8 @@ http {
 
   access_log      <%= access_log %>;
 
+  proxy_cache_path <%= File.expand_path(nginx_tests_tmp_dir) %>/cache levels=1:2 keys_zone=zone:10m inactive=10d max_size=100m;
+
   server {
     listen          <%= nginx_port %>;
     server_name     <%= nginx_host %>;
@@ -45,5 +47,33 @@ http {
     }
 
     <%= extra_location %>
+  }
+
+  server {
+    listen          <%= nginx_port %>;
+    server_name     proxied_server;
+
+    location / {
+      <%= "video_thumbextractor;" unless thumbextractor.nil? %>
+      <%= write_directive("video_thumbextractor_video_filename", video_filename) %>
+      <%= write_directive("video_thumbextractor_video_second", video_second) %>
+
+      proxy_set_header Host "static_files_server";
+
+      proxy_pass http://localhost:<%= nginx_port %>;
+
+      proxy_cache zone;
+      proxy_cache_key "$uri";
+      proxy_cache_valid 200 1m;
+    }
+  }
+
+  server {
+    listen          <%= nginx_port %>;
+    server_name     static_files_server;
+
+    location / {
+      root <%= File.expand_path(File.dirname(__FILE__)) %>;
+    }
   }
 }

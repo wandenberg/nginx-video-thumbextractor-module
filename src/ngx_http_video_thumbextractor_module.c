@@ -125,6 +125,7 @@ static ngx_int_t ngx_http_video_thumbextractor_body_filter(ngx_http_request_t *r
     ngx_chain_t                              *out;
     ngx_flag_t                                last_buf = 0;
 
+    ngx_http_video_thumbextractor_file_info_t info;
 
     vtlcf = ngx_http_get_module_loc_conf(r, ngx_http_video_thumbextractor_module);
 
@@ -159,7 +160,22 @@ static ngx_int_t ngx_http_video_thumbextractor_body_filter(ngx_http_request_t *r
 
     ngx_http_set_ctx(r, NULL, ngx_http_video_thumbextractor_module);
 
-    if ((rc = ngx_http_video_thumbextractor_get_thumb(vtlcf, (char *)ctx->filename->data, ctx->second, ctx->width, ctx->height, &out_buffer, &out_len, r->pool, r->connection->log)) != NGX_OK) {
+    info.filename = ctx->filename;
+    info.offset = 0;
+
+#if (NGX_HTTP_CACHE)
+    if (r->cache) {
+        if ((info.filename = ngx_http_video_thumbextractor_create_str(r->pool, r->cache->file.name.len)) == NULL) {
+            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "video thumb extractor module: unable to allocate memory to copy proxy cache full filename");
+            return ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        ngx_memcpy(info.filename->data, r->cache->file.name.data, r->cache->file.name.len);
+        info.offset = r->cache->body_start;
+    }
+#endif
+
+    if ((rc = ngx_http_video_thumbextractor_get_thumb(vtlcf, &info, ctx->second, ctx->width, ctx->height, &out_buffer, &out_len, r->pool, r->connection->log)) != NGX_OK) {
         if (rc == NGX_ERROR) {
             return ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_INTERNAL_SERVER_ERROR);
         }

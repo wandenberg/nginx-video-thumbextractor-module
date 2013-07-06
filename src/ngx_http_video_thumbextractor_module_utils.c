@@ -29,6 +29,7 @@
 #include <jpeglib.h>
 #include <wand/magick_wand.h>
 
+#define NGX_HTTP_VIDEO_THUMBEXTRACTOR_BUFFER_SIZE 1024 * 8
 #define NGX_HTTP_VIDEO_THUMBEXTRACTOR_MEMORY_STEP 1024
 #define NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB         "RGB"
 
@@ -48,8 +49,37 @@ ngx_http_video_thumbextractor_create_str(ngx_pool_t *pool, uint len)
 }
 
 
+int64_t ngx_http_video_thumbextractor_seek_data_from_file(void *opaque, int64_t offset, int whence)
+{
+    ngx_http_video_thumbextractor_file_info_t *info = (ngx_http_video_thumbextractor_file_info_t *) opaque;
+    if (whence == AVSEEK_SIZE) {
+        return info->size;
+    }
+
+    if ((whence == SEEK_SET) || (whence == SEEK_CUR) || (whence == SEEK_END)) {
+        return fseek(info->fd, info->offset + offset, whence);
+    }
+    return -1;
+}
+
+
+int ngx_http_video_thumbextractor_read_data_from_file(void *opaque, uint8_t *buf, int buf_len)
+{
+    ngx_http_video_thumbextractor_file_info_t *info = (ngx_http_video_thumbextractor_file_info_t *) opaque;
+
+    if ((info->offset > 0) && (ftell(info->fd) <= 0)) {
+        fseek(info->fd, info->offset, SEEK_SET);
+    }
+
+    if (fread(buf, sizeof(uint8_t), buf_len, info->fd) == (u_int) buf_len) {
+        return buf_len;
+    }
+    return -1;
+}
+
+
 static int
-ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t *cf, const char *filename, int64_t second, ngx_uint_t width, ngx_uint_t height, caddr_t *out_buffer, size_t *out_len, ngx_pool_t *temp_pool, ngx_log_t *log)
+ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_file_info_t *info, int64_t second, ngx_uint_t width, ngx_uint_t height, caddr_t *out_buffer, size_t *out_len, ngx_pool_t *temp_pool, ngx_log_t *log)
 {
     int              rc, videoStream, frameFinished = 0;
     unsigned int     i;
@@ -65,6 +95,38 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     ngx_flag_t       needs_crop = 0;
     MagickWand      *m_wand = NULL;
     MagickBooleanType mrc;
+    unsigned char   *bufferAVIO = NULL;
+    AVIOContext     *pAVIOCtx = NULL;
+    char            *filename = (char *) info->filename->data;
+
+    // Open video file
+    if ((info->fd = fopen(filename, "rb")) == NULL) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't open file %s", filename);
+        rc = EXIT_FAILURE;
+        goto exit;
+    }
+
+    // Get file size
+    fseek(info->fd, 0, SEEK_END);
+    info->size = ftell(info->fd) - info->offset;
+    fseek(info->fd, 0, SEEK_SET);
+
+    pFormatCtx = avformat_alloc_context();
+    bufferAVIO = (unsigned char *) av_malloc(NGX_HTTP_VIDEO_THUMBEXTRACTOR_BUFFER_SIZE * sizeof(unsigned char));
+    if ((pFormatCtx == NULL) || (bufferAVIO == NULL)) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't alloc AVIO buffer");
+        rc = NGX_ERROR;
+        goto exit;
+    }
+
+    pAVIOCtx = avio_alloc_context(bufferAVIO, NGX_HTTP_VIDEO_THUMBEXTRACTOR_BUFFER_SIZE, 0, info, ngx_http_video_thumbextractor_read_data_from_file, NULL, ngx_http_video_thumbextractor_seek_data_from_file);
+    if (pAVIOCtx == NULL) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't alloc AVIO context");
+        rc = NGX_ERROR;
+        goto exit;
+    }
+
+    pFormatCtx->pb = pAVIOCtx;
 
     // Open video file
     if ((rc = avformat_open_input(&pFormatCtx, filename, NULL, NULL)) != 0) {
@@ -260,6 +322,12 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     av_free_packet(&packet);
 
 exit:
+
+    if ((info->fd != NULL) && (fclose(info->fd) != 0)) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't close file %s", filename);
+        rc = EXIT_FAILURE;
+    }
+
     /* destroy unneeded objects */
 
     // Free the RGB image
@@ -280,6 +348,9 @@ exit:
         avformat_close_input(&pFormatCtx);
 #endif
     }
+
+    // Free AVIO context
+    if (pAVIOCtx != NULL) av_free(pAVIOCtx);
 
     return rc;
 }

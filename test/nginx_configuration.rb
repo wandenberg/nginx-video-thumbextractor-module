@@ -2,8 +2,8 @@ module NginxConfiguration
   def self.default_configuration
     {
       :disable_start_stop_server => false,
-      :master_process => 'off',
-      :daemon => 'off',
+      :master_process => 'on',
+      :daemon => 'on',
       :thumbextractor => "on",
       :video_filename => "$uri",
       :video_second => "$arg_second",

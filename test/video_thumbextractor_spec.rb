@@ -20,6 +20,34 @@ describe "when getting a thumb" do
       end
     end
 
+    describe "and getting an image from a proxy cache file" do
+      before do
+        FileUtils.rm_r File.join(NginxTestHelper.nginx_tests_tmp_dir, "cache")
+      end
+
+      it "should return a image" do
+        nginx_run_server do
+          EventMachine.run do
+            req = EventMachine::HttpRequest.new(nginx_address + '/test_video.mp4?second=2').get :head => {"Host" => 'proxied_server'} ,:timeout => 10
+            req.callback do
+              req.response_header.status.should eq(200)
+              req.response_header.content_length.should_not eq(0)
+              req.response_header["CONTENT_TYPE"].should eq("image/jpeg")
+
+              EventMachine.stop
+            end
+          end
+        end
+      end
+
+      it "should return an image equals to a an image from the real video file" do
+        nginx_run_server do
+          image_1 = image('/test_video.mp4?second=2', {"Host" => 'proxied_server'})
+          image_1.should eq(image('/test_video.mp4?second=2'))
+        end
+      end
+    end
+
     describe "and manipulating 'filename' configuration" do
       it "should accept complex values" do
         nginx_run_server(:video_filename => "$http_x_filename") do
