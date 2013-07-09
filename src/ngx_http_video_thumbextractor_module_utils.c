@@ -248,7 +248,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
 
     int64_t second_on_stream_time_base = second * pFormatCtx->streams[videoStream]->time_base.den / pFormatCtx->streams[videoStream]->time_base.num;
 
-    rc = NGX_ERROR;
+    rc = NGX_HTTP_VIDEO_THUMBEXTRACTOR_SECOND_NOT_FOUND;
     while (!frameFinished && av_read_frame(pFormatCtx, &packet) >= 0) {
         // Is this a packet from the video stream?
         if (packet.stream_index == videoStream) {

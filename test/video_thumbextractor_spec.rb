@@ -19,6 +19,32 @@ describe "when getting a thumb" do
       end
     end
 
+    context "when the requested second is on the end of the video" do
+      context "and using only_keyframe with previous time" do
+        it "should return a 200" do
+          nginx_run_server(:only_keyframe => "on", :next_time => "off") do
+            image('/test_video.mp4?second=12', {}, "200").should_not be_nil
+          end
+        end
+      end
+
+      context "and using only_keyframe with next time" do
+        it "should return a 404" do
+          nginx_run_server(:only_keyframe => "on", :next_time => "on") do
+            image('/test_video.mp4?second=12', {}, "404").should be_nil
+          end
+        end
+      end
+
+      context "and using exact time" do
+        it "should return a 404" do
+          nginx_run_server(:only_keyframe => "off") do
+            image('/test_video.mp4?second=12', {}, "404").should be_nil
+          end
+        end
+      end
+    end
+
     describe "and getting an image from a proxy cache file" do
       before do
         FileUtils.rm_r File.join(NginxTestHelper.nginx_tests_tmp_dir, "cache")

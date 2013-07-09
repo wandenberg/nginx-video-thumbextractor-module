@@ -10,6 +10,9 @@ module NginxConfiguration
       :image_width => "$arg_width",
       :image_height => "$arg_height",
 
+      :only_keyframe => "on",
+      :next_time => "on",
+
       :jpeg_baseline => nil,
       :jpeg_progressive_mode => nil,
       :jpeg_optimize => nil,
