@@ -7,30 +7,14 @@ describe "when getting a thumb" do
   describe "and module is enabled" do
     it "should return a image" do
       nginx_run_server do
-        EventMachine.run do
-          req = EventMachine::HttpRequest.new(nginx_address + '/test_video.mp4?second=2').get :timeout => 10
-          req.callback do
-            req.response_header.status.should eq(200)
-            req.response_header.content_length.should_not eq(0)
-            req.response_header["CONTENT_TYPE"].should eq("image/jpeg")
-
-            EventMachine.stop
-          end
-        end
+        image('/test_video.mp4?second=2', {}, "200").should_not be_nil
       end
     end
 
     context "when the video does not exists" do
       it "should return a 404" do
         nginx_run_server do
-          EventMachine.run do
-            req = EventMachine::HttpRequest.new(nginx_address + '/unexistent_video.mp4?second=2').get :timeout => 10
-            req.callback do
-              req.response_header.status.should eq(404)
-
-              EventMachine.stop
-            end
-          end
+          image('/unexistent_video.mp4?second=2', {}, "404").should be_nil
         end
       end
     end
@@ -42,16 +26,7 @@ describe "when getting a thumb" do
 
       it "should return a image" do
         nginx_run_server do
-          EventMachine.run do
-            req = EventMachine::HttpRequest.new(nginx_address + '/test_video.mp4?second=2').get :head => {"Host" => 'proxied_server'} ,:timeout => 10
-            req.callback do
-              req.response_header.status.should eq(200)
-              req.response_header.content_length.should_not eq(0)
-              req.response_header["CONTENT_TYPE"].should eq("image/jpeg")
-
-              EventMachine.stop
-            end
-          end
+          image('/test_video.mp4?second=2', {"Host" => 'proxied_server'}, "200").should_not be_nil
         end
       end
 
@@ -65,14 +40,7 @@ describe "when getting a thumb" do
       context "when the video does not exists" do
         it "should return a 404" do
           nginx_run_server do
-            EventMachine.run do
-              req = EventMachine::HttpRequest.new(nginx_address + '/unexistent_video.mp4?second=2').get :head => {"Host" => 'proxied_server'} ,:timeout => 10
-              req.callback do
-                req.response_header.status.should eq(404)
-
-                EventMachine.stop
-              end
-            end
+            image('/unexistent_video.mp4?second=2', {"Host" => 'proxied_server'}, "404").should be_nil
           end
         end
       end
@@ -81,16 +49,7 @@ describe "when getting a thumb" do
     describe "and manipulating 'filename' configuration" do
       it "should accept complex values" do
         nginx_run_server(:video_filename => "$http_x_filename") do
-          EventMachine.run do
-            req = EventMachine::HttpRequest.new(nginx_address + '/?second=2').get :head => {"x-filename" => '/test_video.mp4'} ,:timeout => 10
-            req.callback do
-              req.response_header.status.should eq(200)
-              req.response_header.content_length.should_not eq(0)
-              req.response_header["CONTENT_TYPE"].should eq("image/jpeg")
-
-              EventMachine.stop
-            end
-          end
+          image('/?second=2', {"x-filename" => '/test_video.mp4'}, "200").should_not be_nil
         end
       end
     end
@@ -98,31 +57,13 @@ describe "when getting a thumb" do
     describe "and manipulating 'second' configuration" do
       it "should accept complex values" do
         nginx_run_server(:video_second => "$arg_second$http_x_second") do
-          EventMachine.run do
-            req = EventMachine::HttpRequest.new(nginx_address + '/test_video.mp4').get :head => {"x-second" => 2} ,:timeout => 10
-            req.callback do
-              req.response_header.status.should eq(200)
-              req.response_header.content_length.should_not eq(0)
-              req.response_header["CONTENT_TYPE"].should eq("image/jpeg")
-
-              EventMachine.stop
-            end
-          end
+          image('/test_video.mp4', {"x-second" => 2}, "200").should_not be_nil
         end
       end
 
       it "should return 404 when second is greather than duration" do
         nginx_run_server(:video_second => "$arg_second$http_x_second") do
-          EventMachine.run do
-            req = EventMachine::HttpRequest.new(nginx_address + '/test_video.mp4').get :head => {"x-second" => 20} ,:timeout => 10
-            req.callback do
-              req.response_header.status.should eq(404)
-              req.response_header.content_length.should_not eq(0)
-              req.response_header["CONTENT_TYPE"].should eq("text/html")
-
-              EventMachine.stop
-            end
-          end
+          image('/test_video.mp4', {"x-second" => 20}, "404").should be_nil
         end
       end
 
@@ -137,31 +78,13 @@ describe "when getting a thumb" do
     describe "and manipulating 'width' configuration" do
       it "should accept complex values" do
         nginx_run_server(:image_width => "$arg_width$http_x_width") do
-          EventMachine.run do
-            req = EventMachine::HttpRequest.new(nginx_address + '/test_video.mp4?second=2').get :head => {"x-width" => 100} ,:timeout => 10
-            req.callback do
-              req.response_header.status.should eq(200)
-              req.response_header.content_length.should_not eq(0)
-              req.response_header["CONTENT_TYPE"].should eq("image/jpeg")
-
-              EventMachine.stop
-            end
-          end
+          image('/test_video.mp4?second=2', {"x-width" => 100}, "200").should_not be_nil
         end
       end
 
       it "should reject width less than 16px" do
         nginx_run_server(:image_width => "$arg_width$http_x_width") do
-          EventMachine.run do
-            req = EventMachine::HttpRequest.new(nginx_address + '/test_video.mp4?second=2').get :head => {"x-width" => 15} ,:timeout => 10
-            req.callback do
-              req.response_header.status.should eq(400)
-              req.response_header.content_length.should_not eq(0)
-              req.response_header["CONTENT_TYPE"].should eq("text/html")
-
-              EventMachine.stop
-            end
-          end
+          image('/test_video.mp4?second=2', {"x-width" => 15}, "400").should be_nil
         end
       end
 
@@ -183,31 +106,13 @@ describe "when getting a thumb" do
     describe "and manipulating 'height' configuration" do
       it "should accept complex values" do
         nginx_run_server(:image_height => "$arg_height$http_x_height") do
-          EventMachine.run do
-            req = EventMachine::HttpRequest.new(nginx_address + '/test_video.mp4?second=2').get :head => {"x-height" => 100} ,:timeout => 10
-            req.callback do
-              req.response_header.status.should eq(200)
-              req.response_header.content_length.should_not eq(0)
-              req.response_header["CONTENT_TYPE"].should eq("image/jpeg")
-
-              EventMachine.stop
-            end
-          end
+          image('/test_video.mp4?second=2', {"x-height" => 100}, "200").should_not be_nil
         end
       end
 
       it "should reject height less than 16px" do
         nginx_run_server(:image_height => "$arg_height$http_x_height") do
-          EventMachine.run do
-            req = EventMachine::HttpRequest.new(nginx_address + '/test_video.mp4?second=2').get :head => {"x-height" => 15} ,:timeout => 10
-            req.callback do
-              req.response_header.status.should eq(400)
-              req.response_header.content_length.should_not eq(0)
-              req.response_header["CONTENT_TYPE"].should eq("text/html")
-
-              EventMachine.stop
-            end
-          end
+          image('/test_video.mp4?second=2', {"x-height" => 15}, "400").should be_nil
         end
       end
 

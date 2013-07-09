@@ -21,11 +21,17 @@ RSpec.configure do |config|
   config.run_all_when_everything_filtered = true
 end
 
-def image(url, headers={})
+def image(url, headers={}, expected_status="200")
   url = URI.parse(nginx_address + url)
   the_request = Net::HTTP::Get.new(url.request_uri)
   headers.keys.each {|k| the_request.add_field(k, headers[k])}
   the_response = Net::HTTP.start(url.host, url.port) { |http| http.request(the_request) }
-  the_response.code.should eq("200")
-  the_response.body
+  the_response.code.should eq(expected_status)
+  if the_response.code == "200"
+    the_response.header.content_type.should eq("image/jpeg")
+    the_response.body
+  else
+    the_response.header.content_type.should eq("text/html")
+    nil
+  end
 end
