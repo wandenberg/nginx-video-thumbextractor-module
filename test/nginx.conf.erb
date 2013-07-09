@@ -65,6 +65,7 @@ http {
       proxy_cache zone;
       proxy_cache_key "$uri";
       proxy_cache_valid 200 1m;
+      proxy_cache_valid 404 30s;
     }
   }
 

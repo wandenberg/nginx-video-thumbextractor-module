@@ -20,6 +20,21 @@ describe "when getting a thumb" do
       end
     end
 
+    context "when the video does not exists" do
+      it "should return a 404" do
+        nginx_run_server do
+          EventMachine.run do
+            req = EventMachine::HttpRequest.new(nginx_address + '/unexistent_video.mp4?second=2').get :timeout => 10
+            req.callback do
+              req.response_header.status.should eq(404)
+
+              EventMachine.stop
+            end
+          end
+        end
+      end
+    end
+
     describe "and getting an image from a proxy cache file" do
       before do
         FileUtils.rm_r File.join(NginxTestHelper.nginx_tests_tmp_dir, "cache")
@@ -44,6 +59,21 @@ describe "when getting a thumb" do
         nginx_run_server do
           image_1 = image('/test_video.mp4?second=2', {"Host" => 'proxied_server'})
           image_1.should eq(image('/test_video.mp4?second=2'))
+        end
+      end
+
+      context "when the video does not exists" do
+        it "should return a 404" do
+          nginx_run_server do
+            EventMachine.run do
+              req = EventMachine::HttpRequest.new(nginx_address + '/unexistent_video.mp4?second=2').get :head => {"Host" => 'proxied_server'} ,:timeout => 10
+              req.callback do
+                req.response_header.status.should eq(404)
+
+                EventMachine.stop
+              end
+            end
+          end
         end
       end
     end

@@ -164,7 +164,7 @@ static ngx_int_t ngx_http_video_thumbextractor_body_filter(ngx_http_request_t *r
     info.offset = 0;
 
 #if (NGX_HTTP_CACHE)
-    if (r->cache) {
+    if (r->cache && (r->headers_out.status == NGX_HTTP_OK)) {
         if ((info.filename = ngx_http_video_thumbextractor_create_str(r->pool, r->cache->file.name.len)) == NULL) {
             ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "video thumb extractor module: unable to allocate memory to copy proxy cache full filename");
             return ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_INTERNAL_SERVER_ERROR);
