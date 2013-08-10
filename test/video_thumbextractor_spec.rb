@@ -11,6 +11,15 @@ describe "when getting a thumb" do
       end
     end
 
+    context "when the moov atom is at the end of the file" do
+      it "should return a image equals to when it is at the beginning" do
+        nginx_run_server do
+          image_1 = image('/test_video_moov_atom_at_end.mp4?second=2')
+          image_1.should eq(image('/test_video.mp4?second=2'))
+        end
+      end
+    end
+
     context "when the video does not exists" do
       it "should return a 404" do
         nginx_run_server do
@@ -37,9 +46,9 @@ describe "when getting a thumb" do
       end
 
       context "and using exact time" do
-        it "should return a 404" do
+        it "should return a 200" do
           nginx_run_server(:only_keyframe => "off") do
-            image('/test_video.mp4?second=12', {}, "404").should be_nil
+            image('/test_video.mp4?second=12', {}, "200").should_not be_nil
           end
         end
       end
@@ -53,6 +62,15 @@ describe "when getting a thumb" do
       it "should return a image" do
         nginx_run_server do
           image('/test_video.mp4?second=2', {"Host" => 'proxied_server'}, "200").should_not be_nil
+        end
+      end
+
+      context "when the moov atom is at the end of the file" do
+        it "should return a image equals to when it is at the beginning" do
+          nginx_run_server do
+            image_1 = image('/test_video_moov_atom_at_end.mp4?second=2', {"Host" => 'proxied_server'})
+            image_1.should eq(image('/test_video.mp4?second=2', {"Host" => 'proxied_server'}))
+          end
         end
       end
 

@@ -71,10 +71,8 @@ int ngx_http_video_thumbextractor_read_data_from_file(void *opaque, uint8_t *buf
         fseek(info->fd, info->offset, SEEK_SET);
     }
 
-    if (fread(buf, sizeof(uint8_t), buf_len, info->fd) == (u_int) buf_len) {
-        return buf_len;
-    }
-    return -1;
+    int r = fread(buf, sizeof(uint8_t), buf_len, info->fd);
+    return (r == -1) ? AVERROR(errno) : r;
 }
 
 
