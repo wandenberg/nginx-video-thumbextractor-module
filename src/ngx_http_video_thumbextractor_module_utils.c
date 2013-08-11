@@ -144,7 +144,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
         goto exit;
     }
 
-    if ((pFormatCtx->duration > 0) && (second > (pFormatCtx->duration / AV_TIME_BASE))) {
+    if ((pFormatCtx->duration > 0) && ((((float_t) pFormatCtx->duration / AV_TIME_BASE) - second)) < 0.1) {
         ngx_log_error(NGX_LOG_WARN, log, 0, "video thumb extractor module: seconds greater than duration");
         rc = NGX_HTTP_VIDEO_THUMBEXTRACTOR_SECOND_NOT_FOUND;
         goto exit;
