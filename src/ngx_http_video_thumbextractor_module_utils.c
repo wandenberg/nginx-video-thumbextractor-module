@@ -79,7 +79,7 @@ int ngx_http_video_thumbextractor_read_data_from_file(void *opaque, uint8_t *buf
 static int
 ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_file_info_t *info, int64_t second, ngx_uint_t width, ngx_uint_t height, caddr_t *out_buffer, size_t *out_len, ngx_pool_t *temp_pool, ngx_log_t *log)
 {
-    int              rc, videoStream, frameFinished = 0;
+    int              rc, videoStream, frameFinished = 0, frameDecoded = 0;
     unsigned int     i;
     AVFormatContext *pFormatCtx = NULL;
     AVCodecContext  *pCodecCtx = NULL;
@@ -246,6 +246,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
 
     int64_t second_on_stream_time_base = second * pFormatCtx->streams[videoStream]->time_base.den / pFormatCtx->streams[videoStream]->time_base.num;
 
+    // Find the nearest frame
     rc = NGX_HTTP_VIDEO_THUMBEXTRACTOR_SECOND_NOT_FOUND;
     while (!frameFinished && av_read_frame(pFormatCtx, &packet) >= 0) {
         // Is this a packet from the video stream?
@@ -254,62 +255,9 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
             avcodec_decode_video2(pCodecCtx, pFrame, &frameFinished, &packet);
             // Did we get a video frame?
             if (frameFinished) {
+                frameDecoded = 1;
                 if (!cf->only_keyframe && (pFrame->pkt_pts < second_on_stream_time_base)) {
                     frameFinished = 0;
-                    av_free_packet(&packet);
-                    continue;
-                }
-
-                // Convert the image from its native format to RGB
-                struct SwsContext *img_resample_ctx = sws_getContext(pCodecCtx->width, pCodecCtx->height, pCodecCtx->pix_fmt,
-                        sws_width, sws_height, PIX_FMT_RGB24, SWS_BICUBIC, NULL, NULL, NULL);
-
-                sws_scale(img_resample_ctx, (const uint8_t * const *) pFrame->data, pFrame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
-                sws_freeContext(img_resample_ctx);
-
-
-                if (needs_crop) {
-                    MagickWandGenesis();
-                    mrc = MagickTrue;
-
-                    if ((m_wand = NewMagickWand()) == NULL){
-                        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not allocate MagickWand memory");
-                        mrc = MagickFalse;
-                    }
-
-                    if (mrc == MagickTrue) {
-                        mrc = MagickConstituteImage(m_wand, sws_width, sws_height, NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB, CharPixel, pFrameRGB->data[0]);
-                    }
-
-                    if (mrc == MagickTrue) {
-                        mrc = MagickSetImageGravity(m_wand, CenterGravity);
-                    }
-
-                    if (mrc == MagickTrue) {
-                        mrc = MagickCropImage(m_wand, width, height, (sws_width-width)/2, (sws_height-height)/2);
-                    }
-
-                    if (mrc == MagickTrue) {
-                        mrc = MagickExportImagePixels(m_wand, 0, 0, width, height, NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB, CharPixel, pFrameRGB->data[0]);
-                    }
-
-                    /* Clean up */
-                    if (m_wand) {
-                        m_wand = DestroyMagickWand(m_wand);
-                    }
-
-                    MagickWandTerminus();
-
-                    if (mrc != MagickTrue) {
-                        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Error cropping image");
-                        /* stop the while before try to jpeg compress the image */
-                        break;
-                    }
-                }
-
-                // Compress to jpeg
-                if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrameRGB->data[0], pCodecCtx->width, pCodecCtx->height, width, height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
-                    rc = NGX_OK;
                 }
             }
         }
@@ -318,6 +266,58 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
         av_free_packet(&packet);
     }
     av_free_packet(&packet);
+
+    if (frameDecoded) {
+        // Convert the image from its native format to RGB
+        struct SwsContext *img_resample_ctx = sws_getContext(pCodecCtx->width, pCodecCtx->height, pCodecCtx->pix_fmt,
+                sws_width, sws_height, PIX_FMT_RGB24, SWS_BICUBIC, NULL, NULL, NULL);
+
+        sws_scale(img_resample_ctx, (const uint8_t * const *) pFrame->data, pFrame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
+        sws_freeContext(img_resample_ctx);
+
+        if (needs_crop) {
+            MagickWandGenesis();
+            mrc = MagickTrue;
+
+            if ((m_wand = NewMagickWand()) == NULL){
+                ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not allocate MagickWand memory");
+                mrc = MagickFalse;
+            }
+
+            if (mrc == MagickTrue) {
+                mrc = MagickConstituteImage(m_wand, sws_width, sws_height, NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB, CharPixel, pFrameRGB->data[0]);
+            }
+
+            if (mrc == MagickTrue) {
+                mrc = MagickSetImageGravity(m_wand, CenterGravity);
+            }
+
+            if (mrc == MagickTrue) {
+                mrc = MagickCropImage(m_wand, width, height, (sws_width-width)/2, (sws_height-height)/2);
+            }
+
+            if (mrc == MagickTrue) {
+                mrc = MagickExportImagePixels(m_wand, 0, 0, width, height, NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB, CharPixel, pFrameRGB->data[0]);
+            }
+
+            /* Clean up */
+            if (m_wand) {
+                m_wand = DestroyMagickWand(m_wand);
+            }
+
+            MagickWandTerminus();
+
+            if (mrc != MagickTrue) {
+                ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Error cropping image");
+                goto exit;
+            }
+        }
+
+        // Compress to jpeg
+        if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrameRGB->data[0], pCodecCtx->width, pCodecCtx->height, width, height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
+            rc = NGX_OK;
+        }
+    }
 
 exit:
 
@@ -330,10 +330,10 @@ exit:
 
     // Free the RGB image
     if (buffer != NULL) av_free(buffer);
-    if (pFrameRGB != NULL) av_free(pFrameRGB);
+    if (pFrameRGB != NULL) av_freep(&pFrameRGB);
 
     // Free the YUV frame
-    if (pFrame != NULL) av_free(pFrame);
+    if (pFrame != NULL) av_freep(&pFrame);
 
     // Close the codec
     if (pCodecCtx != NULL) avcodec_close(pCodecCtx);
@@ -348,7 +348,7 @@ exit:
     }
 
     // Free AVIO context
-    if (pAVIOCtx != NULL) av_free(pAVIOCtx);
+    if (pAVIOCtx != NULL) av_freep(pAVIOCtx);
 
     return rc;
 }
