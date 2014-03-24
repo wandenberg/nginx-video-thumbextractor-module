@@ -1,6 +1,7 @@
 ngx_addon_name=ngx_http_video_thumbextractor_module
-ngx_feature_libs="-lavformat -lavcodec -lavutil -lswscale -ljpeg -lMagickWand"
+ngx_feature_libs="-lavformat -lavcodec -lavutil -lswscale -ljpeg $(MagickWand-config --ldflags)"
 HTTP_AUX_FILTER_MODULES="$HTTP_AUX_FILTER_MODULES $ngx_addon_name"
+CFLAGS="$CFLAGS $(MagickWand-config --cflags)"
 CORE_INCS="$CORE_INCS \
     $ngx_addon_dir/src \
     $ngx_addon_dir/include"
