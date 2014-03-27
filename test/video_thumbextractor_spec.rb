@@ -101,13 +101,13 @@ describe "when getting a thumb" do
     describe "and manipulating 'second' configuration" do
       it "should accept complex values" do
         nginx_run_server(:video_second => "$arg_second$http_x_second") do
-          image('/test_video.mp4', {"x-second" => 2}, "200").should_not be_nil
+          image('/test_video.mp4', {"x-second" => "2"}, "200").should_not be_nil
         end
       end
 
       it "should return 404 when second is greather than duration" do
         nginx_run_server(:video_second => "$arg_second$http_x_second") do
-          image('/test_video.mp4', {"x-second" => 20}, "404").should be_nil
+          image('/test_video.mp4', {"x-second" => "20"}, "404").should be_nil
         end
       end
 
@@ -122,13 +122,13 @@ describe "when getting a thumb" do
     describe "and manipulating 'width' configuration" do
       it "should accept complex values" do
         nginx_run_server(:image_width => "$arg_width$http_x_width") do
-          image('/test_video.mp4?second=2', {"x-width" => 100}, "200").should_not be_nil
+          image('/test_video.mp4?second=2', {"x-width" => "100"}, "200").should_not be_nil
         end
       end
 
       it "should reject width less than 16px" do
         nginx_run_server(:image_width => "$arg_width$http_x_width") do
-          image('/test_video.mp4?second=2', {"x-width" => 15}, "400").should be_nil
+          image('/test_video.mp4?second=2', {"x-width" => "15"}, "400").should be_nil
         end
       end
 
@@ -150,13 +150,13 @@ describe "when getting a thumb" do
     describe "and manipulating 'height' configuration" do
       it "should accept complex values" do
         nginx_run_server(:image_height => "$arg_height$http_x_height") do
-          image('/test_video.mp4?second=2', {"x-height" => 100}, "200").should_not be_nil
+          image('/test_video.mp4?second=2', {"x-height" => "100"}, "200").should_not be_nil
         end
       end
 
       it "should reject height less than 16px" do
         nginx_run_server(:image_height => "$arg_height$http_x_height") do
-          image('/test_video.mp4?second=2', {"x-height" => 15}, "400").should be_nil
+          image('/test_video.mp4?second=2', {"x-height" => "15"}, "400").should be_nil
         end
       end
 
