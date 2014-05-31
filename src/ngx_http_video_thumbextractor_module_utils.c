@@ -219,11 +219,20 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     }
 
 
+#if LIBAVUTIL_VERSION_INT <= AV_VERSION_INT(52, 18, 100)
     // Allocate video frame
     pFrame = avcodec_alloc_frame();
 
     // Allocate an AVFrame structure
     pFrameRGB = avcodec_alloc_frame();
+#else
+    // Allocate video frame
+    pFrame = av_frame_alloc();
+
+    // Allocate an AVFrame structure
+    pFrameRGB = av_frame_alloc();
+#endif
+
     if ((pFrame == NULL) || (pFrameRGB == NULL)) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not alloc frame memory");
         rc = NGX_ERROR;
@@ -330,10 +339,18 @@ exit:
 
     // Free the RGB image
     if (buffer != NULL) av_free(buffer);
+
+#if LIBAVUTIL_VERSION_INT <= AV_VERSION_INT(52, 18, 100)
     if (pFrameRGB != NULL) av_freep(&pFrameRGB);
 
     // Free the YUV frame
     if (pFrame != NULL) av_freep(&pFrame);
+#else
+    if (pFrameRGB != NULL) av_frame_free(&pFrameRGB);
+
+    // Free the YUV frame
+    if (pFrame != NULL) av_frame_free(&pFrame);
+#endif
 
     // Close the codec
     if (pCodecCtx != NULL) avcodec_close(pCodecCtx);
