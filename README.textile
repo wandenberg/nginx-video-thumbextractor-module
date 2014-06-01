@@ -24,19 +24,13 @@ This module depends from some libraries (headers and shared objects) which has t
 * jpeg - "libjpeg":http://libjpeg.sourceforge.net
 * MagickWand - commonly distributed with "ImageMagick":http://www.imagemagick.org
 
-To install FFmpeg from source with the specified versions follow the steps bellow:
-
-<pre>
-  git clone git://git.videolan.org/ffmpeg
-  cd ffmpeg
-  git checkout n0.8.7 -b tag_n0.8.7
-  ./configure --prefix=/usr --disable-ffserver --disable-ffplay --enable-shared
-  make clean && make
-  make install
-</pre>
-
+The MagickWand location will be discovered using the MagickWand-config command, so set the PATH variable to point to the right version you want to use, in case you have multiple versions.
 
 h1(#recommendation). Recommendation
+
+When installing FFmpeg from source do not forget to enable shared libraries using _--enable-shared_
+
+If you don't install FFmpeg from source you need to be sure that you have headers files for the libs avformat, avcodev, avutil and swscale. On Ubuntu, for example you may install libavformat-dev, libavcodec-dev, libavutil-dev and libswscale-dev packages*
 
 By default ImageMagick uses OpenMP to process images in threads.
 I recommend to configure/compile ImageMagick using the option _--disable-openmp_ since that is not a good idea use threads inside workers.
@@ -54,7 +48,7 @@ Install the above requirements and follow the steps bellow.
 
 <pre>
     # clone the project
-    git clone http://github.com/wandenberg/nginx-video-thumbextractor-module.git
+    git clone https://github.com/wandenberg/nginx-video-thumbextractor-module.git
     NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH=$PWD/nginx-video-thumbextractor-module
 
     # get desired nginx version (tested with 1.0.x series)
@@ -64,7 +58,7 @@ Install the above requirements and follow the steps bellow.
     tar xzvf nginx-1.0.10.tar.gz
     cd nginx-1.0.10
     # configure nginx specifying the path where are MagickWand headers
-    ./configure --add-module=../nginx-video-thumbextractor-module --with-cc-opt='-I /usr/include/ImageMagick'
+    ./configure --add-module=$NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH
     make
 
     # install and finish
@@ -188,12 +182,56 @@ If only the height is specified the width will be determined using video scale t
 If both, width and height, are specified the image will suffers a resize and an eventual crop to keep the aspect.
 
 
+h2(#video_thumbextractor_only_keyframe). video_thumbextractor_only_keyframe
+
+*syntax:* _video_thumbextractor_only_keyframe on|off_
+
+*default:* _on_
+
+*context:* _http_
+
+*release version:* _0.3.0_
+
+Set if only the keyframes should be used to create the image.
+When set to off, the process will be a bit slower because the video will be decoded from the nearest keyframe up to the exact requested time.
+
+
+h2(#video_thumbextractor_next_time). video_thumbextractor_next_time
+
+*syntax:* _video_thumbextractor_next_time on|off_
+
+*default:* _on_
+
+*context:* _http_
+
+*release version:* _0.3.0_
+
+Set if will use the previous or the next keyframe considering the requested time when configured to use only the keyframes.
+
+
 h1(#contributors). Contributors
 
 "People":contributors
 
 
 h1(#changelog). Changelog
+
+h2(#0_4_0). v0.4.0
+
+* fix to proper read videos with the moov atom is at the end of the file
+* fix to use the nearest decoded frame, in the case of requested time is on the end of the video
+* fix CFLAGS, LDFLAGS and ngx_feature_libs to find the parameters to compile using right MagickWand lib version
+* using av_frame_alloc instead of avcodec_alloc_frame when available
+
+h2(#0_3_0). v0.3.0
+
+* fix frame allocation assert
+* add configuration to choose between only keyframes or not, and if will use the previous or next frame relative to given time
+* make possible read the video from an nginx cache file
+
+h2(#0_2_0). v0.2.0
+
+* fix use of deprecated functions
 
 h2(#0_1_0). v0.1.0
 
