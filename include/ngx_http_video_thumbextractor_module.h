@@ -60,7 +60,7 @@ typedef struct {
     int64_t                          size;
     int64_t                          offset;
     ngx_str_t                       *filename;
-    FILE                            *fd;
+    ngx_file_t                       file;
 } ngx_http_video_thumbextractor_file_info_t;
 
 ngx_int_t ngx_http_video_thumbextractor_access_handler(ngx_http_request_t *r);

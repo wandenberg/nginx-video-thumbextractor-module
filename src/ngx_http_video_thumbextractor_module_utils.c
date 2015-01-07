@@ -57,7 +57,8 @@ int64_t ngx_http_video_thumbextractor_seek_data_from_file(void *opaque, int64_t 
     }
 
     if ((whence == SEEK_SET) || (whence == SEEK_CUR) || (whence == SEEK_END)) {
-        return fseek(info->fd, info->offset + offset, whence);
+        info->file.offset = lseek(info->file.fd, info->offset + offset, whence);
+        return info->file.offset < 0 ? -1 : 0;
     }
     return -1;
 }
@@ -67,12 +68,15 @@ int ngx_http_video_thumbextractor_read_data_from_file(void *opaque, uint8_t *buf
 {
     ngx_http_video_thumbextractor_file_info_t *info = (ngx_http_video_thumbextractor_file_info_t *) opaque;
 
-    if ((info->offset > 0) && (ftell(info->fd) <= 0)) {
-        fseek(info->fd, info->offset, SEEK_SET);
+    if ((info->offset > 0) && (info->file.offset < info->offset)) {
+        info->file.offset = lseek(info->file.fd, info->offset, SEEK_SET);
+        if (info->file.offset < 0) {
+            return AVERROR(ngx_errno);
+        }
     }
 
-    int r = fread(buf, sizeof(uint8_t), buf_len, info->fd);
-    return (r == -1) ? AVERROR(errno) : r;
+    ssize_t r = ngx_read_file(&info->file, buf, buf_len, info->file.offset);
+    return (r == NGX_ERROR) ? AVERROR(ngx_errno) : r;
 }
 
 
@@ -96,18 +100,28 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     unsigned char   *bufferAVIO = NULL;
     AVIOContext     *pAVIOCtx = NULL;
     char            *filename = (char *) info->filename->data;
+    ngx_file_info_t  fi;
+
+    ngx_memzero(&info->file, sizeof(ngx_file_t));
+    info->file.name = *info->filename;
+    info->file.log = log;
 
     // Open video file
-    if ((info->fd = fopen(filename, "rb")) == NULL) {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't open file %s", filename);
+    info->file.fd = ngx_open_file(filename, NGX_FILE_RDONLY, NGX_FILE_OPEN, 0);
+    if (info->file.fd == NGX_INVALID_FILE) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't open file \"%V\"", info->filename);
+        rc = EXIT_FAILURE;
+        goto exit;
+    }
+
+    if (ngx_fd_info(info->file.fd, &fi) == NGX_FILE_ERROR) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: unable to stat file \"%V\"", info->filename);
         rc = EXIT_FAILURE;
         goto exit;
     }
 
     // Get file size
-    fseek(info->fd, 0, SEEK_END);
-    info->size = ftell(info->fd) - info->offset;
-    fseek(info->fd, 0, SEEK_SET);
+    info->size = (size_t) ngx_file_size(&fi) - info->offset;
 
     pFormatCtx = avformat_alloc_context();
     bufferAVIO = (unsigned char *) av_malloc(NGX_HTTP_VIDEO_THUMBEXTRACTOR_BUFFER_SIZE * sizeof(unsigned char));
@@ -330,7 +344,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
 
 exit:
 
-    if ((info->fd != NULL) && (fclose(info->fd) != 0)) {
+    if ((info->file.fd != NGX_INVALID_FILE) && (ngx_close_file(info->file.fd) == NGX_FILE_ERROR)) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't close file %s", filename);
         rc = EXIT_FAILURE;
     }
