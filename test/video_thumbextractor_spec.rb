@@ -7,7 +7,8 @@ describe "when getting a thumb" do
   describe "and module is enabled" do
     it "should return a image" do
       nginx_run_server do
-        expect(image('/test_video.mp4?second=2', {}, "200")).not_to be_nil
+        content = image('/test_video.mp4?second=2', {}, "200")
+        expect(content).to eq(IO.binread('test_video_640_x_360.jpg'))
       end
     end
 
@@ -16,6 +17,7 @@ describe "when getting a thumb" do
         nginx_run_server do
           image_1 = image('/test_video_moov_atom_at_end.mp4?second=2')
           expect(image_1).to eq(image('/test_video.mp4?second=2'))
+          expect(IO.binread('test_video.mp4')).not_to eq(IO.binread('test_video_moov_atom_at_end.mp4'))
         end
       end
     end
@@ -70,6 +72,7 @@ describe "when getting a thumb" do
           nginx_run_server do
             image_1 = image('/test_video_moov_atom_at_end.mp4?second=2', {"Host" => 'proxied_server'})
             expect(image_1).to eq(image('/test_video.mp4?second=2', {"Host" => 'proxied_server'}))
+            expect(IO.binread('test_video.mp4')).not_to eq(IO.binread('test_video_moov_atom_at_end.mp4'))
           end
         end
       end
@@ -145,6 +148,13 @@ describe "when getting a thumb" do
           expect(image_1).to eq(image('/test_video.mp4?second=2'))
         end
       end
+
+      it "should ignore width if only this dimension is specified" do
+        nginx_run_server do
+          content = image('/test_video.mp4?second=2&width=100', {}, "200")
+          expect(content).to eq(IO.binread('test_video_640_x_360.jpg'))
+        end
+      end
     end
 
     describe "and manipulating 'height' configuration" do
@@ -176,15 +186,22 @@ describe "when getting a thumb" do
 
       it "should return an image with relative size if only height is given" do
         nginx_run_server(image_height: "$arg_height$http_x_height") do
-          image_1 = image('/test_video.mp4?second=2&width=480&height=270')
-          expect(image_1).to eq(image('/test_video.mp4?second=2&height=270'))
+          content = image('/test_video.mp4?second=2&height=270')
+          expect(content).to eq(IO.binread('test_video_480_x_270.jpg'))
         end
       end
 
       it "should return an image with specified size if height and width are given" do
         nginx_run_server(image_height: "$arg_height$http_x_height") do
-          image_1 = image('/test_video.mp4?second=2')
-          expect(image_1).not_to eq(image('/test_video.mp4?second=2&width=200&height=360'))
+          content = image('/test_video.mp4?second=2&width=200&height=60')
+          expect(content).to eq(IO.binread('test_video_200_x_60.jpg'))
+        end
+      end
+
+      it "should accept a different aspect ratio" do
+        nginx_run_server(image_height: "$arg_height$http_x_height") do
+          content = image('/test_video.mp4?second=2&width=50&height=100')
+          expect(content).to eq(IO.binread('test_video_50_x_100.jpg'))
         end
       end
     end
