@@ -148,11 +148,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     }
 
     // Retrieve stream information
-#if LIBAVFORMAT_VERSION_INT <= AV_VERSION_INT(53, 5, 0)
-    if (av_find_stream_info(pFormatCtx) < 0) {
-#else
     if (avformat_find_stream_info(pFormatCtx, NULL) < 0) {
-#endif
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't find stream information");
         rc = NGX_ERROR;
         goto exit;
@@ -190,11 +186,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     }
 
     // Open codec
-#if LIBAVCODEC_VERSION_INT <= AV_VERSION_INT(53, 8, 0)
-    if ((rc = avcodec_open(pCodecCtx, pCodec)) < 0) {
-#else
     if ((rc = avcodec_open2(pCodecCtx, pCodec, NULL)) < 0) {
-#endif
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not open codec, error %d", rc);
         rc = NGX_ERROR;
         goto exit;
@@ -232,20 +224,11 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
         needs_crop = 1;
     }
 
-
-#if LIBAVUTIL_VERSION_INT <= AV_VERSION_INT(52, 18, 100)
-    // Allocate video frame
-    pFrame = avcodec_alloc_frame();
-
-    // Allocate an AVFrame structure
-    pFrameRGB = avcodec_alloc_frame();
-#else
     // Allocate video frame
     pFrame = av_frame_alloc();
 
     // Allocate an AVFrame structure
     pFrameRGB = av_frame_alloc();
-#endif
 
     if ((pFrame == NULL) || (pFrameRGB == NULL)) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not alloc frame memory");
@@ -354,28 +337,17 @@ exit:
     // Free the RGB image
     if (buffer != NULL) av_free(buffer);
 
-#if LIBAVUTIL_VERSION_INT <= AV_VERSION_INT(52, 18, 100)
-    if (pFrameRGB != NULL) av_freep(&pFrameRGB);
-
-    // Free the YUV frame
-    if (pFrame != NULL) av_freep(&pFrame);
-#else
     if (pFrameRGB != NULL) av_frame_free(&pFrameRGB);
 
     // Free the YUV frame
     if (pFrame != NULL) av_frame_free(&pFrame);
-#endif
 
     // Close the codec
     if (pCodecCtx != NULL) avcodec_close(pCodecCtx);
 
     // Close the video file
     if (pFormatCtx != NULL) {
-#if LIBAVFORMAT_VERSION_INT <= AV_VERSION_INT(53, 5, 0)
-        av_close_input_file(pFormatCtx);
-#else
         avformat_close_input(&pFormatCtx);
-#endif
     }
 
     // Free AVIO context

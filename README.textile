@@ -17,10 +17,10 @@ h1(#requirements). Requirements
 
 This module depends from some libraries (headers and shared objects) which has to be installed before it:
 
-* avformat >= 53.4.0 (tested versions: 53.4.0, 53.5.0) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* avcodec >= 53.7.0 (tested versions: 53.7.0, 53.8.0) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* avutil >= 51.9.1 (tested versions: 51.9.1, 51.30.0) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* swscale >= 2.0.0 (tested versions: 2.0.0) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avformat > 53.5.0 (last tested version: 55.33.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avcodec > 53.8.0 (last tested versions: 55.52.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avutil > 52.18.100 (last tested versions: 52.66.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* swscale >= 2.0.0 (last tested versions: 2.5.102) - commonly distributed with "FFmpeg":http://ffmpeg.org
 * jpeg - "libjpeg":http://libjpeg.sourceforge.net
 * MagickWand - commonly distributed with "ImageMagick":http://www.imagemagick.org
 
