@@ -33,7 +33,7 @@
 #define NGX_HTTP_VIDEO_THUMBEXTRACTOR_MEMORY_STEP 1024
 #define NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB         "RGB"
 
-static uint32_t     ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_conf_t *cf, uint8_t * buffer, int in_width, int in_height, int out_width, int out_height, caddr_t *out_buffer, size_t *out_len, size_t uncompressed_size, ngx_pool_t *temp_pool);
+static uint32_t     ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_conf_t *cf, uint8_t * buffer, int out_width, int out_height, caddr_t *out_buffer, size_t *out_len, size_t uncompressed_size, ngx_pool_t *temp_pool);
 static void         ngx_http_video_thumbextractor_jpeg_memory_dest (j_compress_ptr cinfo, caddr_t *out_buf, size_t *out_size, size_t uncompressed_size, ngx_pool_t *temp_pool);
 
 static ngx_str_t *
@@ -337,7 +337,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
         }
 
         // Compress to jpeg
-        if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrameRGB->data[0], pCodecCtx->width, pCodecCtx->height, width, height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
+        if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrameRGB->data[0], width, height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
             rc = NGX_OK;
         }
     }
@@ -395,14 +395,12 @@ ngx_http_video_thumbextractor_init_libraries(void)
 
 
 static uint32_t
-ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_conf_t *cf, uint8_t * buffer, int in_width, int in_height, int out_width, int out_height, caddr_t *out_buffer, size_t *out_len, size_t uncompressed_size, ngx_pool_t *temp_pool)
+ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_conf_t *cf, uint8_t * buffer, int out_width, int out_height, caddr_t *out_buffer, size_t *out_len, size_t uncompressed_size, ngx_pool_t *temp_pool)
 {
     struct jpeg_compress_struct cinfo;
     struct jpeg_error_mgr jerr;
     JSAMPROW row_pointer[1];
     int row_stride;
-    int image_d_width = in_width;
-    int image_d_height = in_height;
 
     if ( !buffer ) return 1;
 
@@ -421,19 +419,8 @@ ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_co
     cinfo.JFIF_major_version = 1;
     cinfo.JFIF_minor_version = 2;
     cinfo.density_unit = 1; /* 0=unknown, 1=dpi, 2=dpcm */
-    /* Image DPI is determined by Y_density, so we leave that at
-       jpeg_dpi if possible and crunch X_density instead (PAR > 1) */
-
-    if (out_height * image_d_width > out_width * image_d_height) {
-        image_d_width = out_height * image_d_width / image_d_height;
-        image_d_height = out_height;
-    } else {
-        image_d_height = out_width * image_d_height / image_d_width;
-        image_d_width = out_width;
-    }
-
-    cinfo.X_density = cf->jpeg_dpi * out_width / image_d_width;
-    cinfo.Y_density = cf->jpeg_dpi * out_height / image_d_height;
+    cinfo.X_density = cf->jpeg_dpi;
+    cinfo.Y_density = cf->jpeg_dpi;
     cinfo.write_Adobe_marker = TRUE;
 
     jpeg_set_quality(&cinfo, cf->jpeg_quality, cf->jpeg_baseline);
