@@ -26,8 +26,10 @@
 #include <ngx_http_video_thumbextractor_module_utils.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
+#include <libavfilter/avfilter.h>
+#include <libavfilter/buffersink.h>
+#include <libavfilter/buffersrc.h>
 #include <jpeglib.h>
-#include <wand/magick_wand.h>
 
 #define NGX_HTTP_VIDEO_THUMBEXTRACTOR_BUFFER_SIZE 1024 * 8
 #define NGX_HTTP_VIDEO_THUMBEXTRACTOR_MEMORY_STEP 1024
@@ -35,6 +37,7 @@
 
 static uint32_t     ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_conf_t *cf, uint8_t * buffer, int linesize, int out_width, int out_height, caddr_t *out_buffer, size_t *out_len, size_t uncompressed_size, ngx_pool_t *temp_pool);
 static void         ngx_http_video_thumbextractor_jpeg_memory_dest (j_compress_ptr cinfo, caddr_t *out_buf, size_t *out_size, size_t uncompressed_size, ngx_pool_t *temp_pool);
+
 
 static ngx_str_t *
 ngx_http_video_thumbextractor_create_str(ngx_pool_t *pool, uint len)
@@ -83,40 +86,45 @@ int ngx_http_video_thumbextractor_read_data_from_file(void *opaque, uint8_t *buf
 static int
 ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_file_info_t *info, int64_t second, ngx_uint_t width, ngx_uint_t height, caddr_t *out_buffer, size_t *out_len, ngx_pool_t *temp_pool, ngx_log_t *log)
 {
-    int              rc, videoStream, frameFinished = 0, frameDecoded = 0;
+    int              rc, ret, videoStream, frameFinished = 0, frameDecoded = 0;
     unsigned int     i;
     AVFormatContext *pFormatCtx = NULL;
     AVCodecContext  *pCodecCtx = NULL;
     AVCodec         *pCodec = NULL;
-    AVFrame         *pFrame = NULL, *pFrameRGB = NULL;
-    uint8_t         *buffer = NULL;
+    AVFrame         *pFrame = NULL;
     AVPacket         packet;
     size_t           uncompressed_size;
     float            scale = 0.0, new_scale = 0.0, scale_sws = 0.0, scale_w = 0.0, scale_h = 0.0;
     int              sws_width = 0, sws_height = 0;
     ngx_flag_t       needs_crop = 0;
-    MagickWand      *m_wand = NULL;
-    MagickBooleanType mrc;
     unsigned char   *bufferAVIO = NULL;
     AVIOContext     *pAVIOCtx = NULL;
     char            *filename = (char *) info->filename->data;
     ngx_file_info_t  fi;
+    AVFilterContext *buffersink_ctx;
+    AVFilterContext *buffersrc_ctx;
+    AVFilterContext *scale_ctx;
+    AVFilterContext *crop_ctx;
+    AVFilterContext *format_ctx;
+    AVFilterGraph   *filter_graph = NULL;
+    char             args[512];
 
     ngx_memzero(&info->file, sizeof(ngx_file_t));
     info->file.name = *info->filename;
     info->file.log = log;
 
+    rc = NGX_ERROR;
+
     // Open video file
     info->file.fd = ngx_open_file(filename, NGX_FILE_RDONLY, NGX_FILE_OPEN, 0);
     if (info->file.fd == NGX_INVALID_FILE) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't open file \"%V\"", info->filename);
-        rc = EXIT_FAILURE;
+        rc = NGX_HTTP_VIDEO_THUMBEXTRACTOR_FILE_NOT_FOUND;
         goto exit;
     }
 
     if (ngx_fd_info(info->file.fd, &fi) == NGX_FILE_ERROR) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: unable to stat file \"%V\"", info->filename);
-        rc = EXIT_FAILURE;
         goto exit;
     }
 
@@ -124,33 +132,30 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     info->size = (size_t) ngx_file_size(&fi) - info->offset;
 
     pFormatCtx = avformat_alloc_context();
-    bufferAVIO = (unsigned char *) av_malloc(NGX_HTTP_VIDEO_THUMBEXTRACTOR_BUFFER_SIZE * sizeof(unsigned char));
+    bufferAVIO = (unsigned char *) av_malloc(NGX_HTTP_VIDEO_THUMBEXTRACTOR_BUFFER_SIZE);
     if ((pFormatCtx == NULL) || (bufferAVIO == NULL)) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't alloc AVIO buffer");
-        rc = NGX_ERROR;
         goto exit;
     }
 
     pAVIOCtx = avio_alloc_context(bufferAVIO, NGX_HTTP_VIDEO_THUMBEXTRACTOR_BUFFER_SIZE, 0, info, ngx_http_video_thumbextractor_read_data_from_file, NULL, ngx_http_video_thumbextractor_seek_data_from_file);
     if (pAVIOCtx == NULL) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't alloc AVIO context");
-        rc = NGX_ERROR;
         goto exit;
     }
 
     pFormatCtx->pb = pAVIOCtx;
 
     // Open video file
-    if ((rc = avformat_open_input(&pFormatCtx, filename, NULL, NULL)) != 0) {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't open file %s, error: %d", filename, rc);
-        rc = (rc == AVERROR(NGX_ENOENT)) ? NGX_HTTP_VIDEO_THUMBEXTRACTOR_FILE_NOT_FOUND : NGX_ERROR;
+    if ((ret = avformat_open_input(&pFormatCtx, filename, NULL, NULL)) != 0) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't open file %s, error: %d", filename, ret);
+        rc = (ret == AVERROR(NGX_ENOENT)) ? NGX_HTTP_VIDEO_THUMBEXTRACTOR_FILE_NOT_FOUND : NGX_ERROR;
         goto exit;
     }
 
     // Retrieve stream information
     if (avformat_find_stream_info(pFormatCtx, NULL) < 0) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't find stream information");
-        rc = NGX_ERROR;
         goto exit;
     }
 
@@ -171,7 +176,6 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
 
     if (videoStream == -1) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Didn't find a video stream");
-        rc = NGX_ERROR;
         goto exit;
     }
 
@@ -181,14 +185,12 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     // Find the decoder for the video stream
     if ((pCodec = avcodec_find_decoder(pCodecCtx->codec_id)) == NULL) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Codec %d not found", pCodecCtx->codec_id);
-        rc = NGX_ERROR;
         goto exit;
     }
 
     // Open codec
-    if ((rc = avcodec_open2(pCodecCtx, pCodec, NULL)) < 0) {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not open codec, error %d", rc);
-        rc = NGX_ERROR;
+    if ((avcodec_open2(pCodecCtx, pCodec, NULL)) < 0) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not open codec");
         goto exit;
     }
 
@@ -203,7 +205,6 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
 
     if ((width < 16) || (height < 16)) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Very small size requested, %d x %d", width, height);
-        rc = NGX_ERROR;
         goto exit;
     }
 
@@ -224,28 +225,82 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
         needs_crop = 1;
     }
 
+    // create filters to scale and crop the selected frame
+    if ((filter_graph = avfilter_graph_alloc()) == NULL) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: unable to create filter graph: out of memory");
+        goto exit;
+    }
+
+    AVRational time_base = pFormatCtx->streams[videoStream]->time_base;
+    snprintf(args, sizeof(args),
+        "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d",
+        pCodecCtx->width, pCodecCtx->height, pCodecCtx->pix_fmt,
+        time_base.num, time_base.den,
+        pCodecCtx->sample_aspect_ratio.num, pCodecCtx->sample_aspect_ratio.den);
+
+    if (avfilter_graph_create_filter(&buffersrc_ctx, avfilter_get_by_name("buffer"), NULL, args, NULL, filter_graph) < 0) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Cannot create buffer source");
+        goto exit;
+    }
+
+    snprintf(args, sizeof(args), "%d:%d:flags=bicubic", sws_width, sws_height);
+    if (avfilter_graph_create_filter(&scale_ctx, avfilter_get_by_name("scale"), NULL, args, NULL, filter_graph) < 0) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error initializing scale filter");
+        goto exit;
+    }
+
+    if (needs_crop) {
+        snprintf(args, sizeof(args), "%ld:%ld", width, height);
+        if (avfilter_graph_create_filter(&crop_ctx, avfilter_get_by_name("crop"), NULL, args, NULL, filter_graph) < 0) {
+            ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error initializing crop filter");
+            goto exit;
+        }
+    }
+
+    if (avfilter_graph_create_filter(&format_ctx, avfilter_get_by_name("format"), NULL, "pix_fmts=rgb24", NULL, filter_graph) < 0) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error initializing scale filter");
+        goto exit;
+    }
+
+    /* buffer video sink: to terminate the filter chain. */
+    if (avfilter_graph_create_filter(&buffersink_ctx, avfilter_get_by_name("buffersink"), NULL, NULL, NULL, filter_graph) < 0) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Cannot create buffer sink");
+        goto exit;
+    }
+
+    // connect inputs and outputs
+    ret = avfilter_link(buffersrc_ctx, 0, scale_ctx, 0);
+    if (needs_crop) {
+        if (ret >= 0) ret = avfilter_link(scale_ctx, 0, crop_ctx, 0);
+        if (ret >= 0) ret = avfilter_link(crop_ctx, 0, format_ctx, 0);
+    } else {
+        if (ret >= 0) ret = avfilter_link(scale_ctx, 0, format_ctx, 0);
+    }
+    if (ret >= 0) ret = avfilter_link(format_ctx, 0, buffersink_ctx, 0);
+
+    if (ret < 0) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error connecting filters");
+        goto exit;
+    }
+
+    if (avfilter_graph_config(filter_graph, NULL) < 0) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error configuring the filter graph");
+        goto exit;
+    }
+
     // Allocate video frame
     pFrame = av_frame_alloc();
 
-    // Allocate an AVFrame structure
-    pFrameRGB = av_frame_alloc();
-
-    if ((pFrame == NULL) || (pFrameRGB == NULL)) {
+    if (pFrame == NULL) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not alloc frame memory");
-        rc = NGX_ERROR;
         goto exit;
     }
 
     // Determine required buffer size and allocate buffer
-    uncompressed_size = avpicture_get_size(PIX_FMT_RGB24, sws_width, sws_height) * sizeof(uint8_t);
-    buffer = (uint8_t *) av_malloc(uncompressed_size);
+    uncompressed_size = avpicture_get_size(AV_PIX_FMT_RGB24, width, height) * sizeof(uint8_t);
 
-    // Assign appropriate parts of buffer to image planes in pFrameRGB
-    // Note that pFrameRGB is an AVFrame, but AVFrame is a superset of AVPicture
-    avpicture_fill((AVPicture *) pFrameRGB, buffer, PIX_FMT_RGB24, sws_width, sws_height);
-
-    if ((rc = av_seek_frame(pFormatCtx, -1, second * AV_TIME_BASE, cf->next_time ? 0 : AVSEEK_FLAG_BACKWARD)) < 0) {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Seek to an invalid time, error: %d", rc);
+    if ((av_seek_frame(pFormatCtx, -1, second * AV_TIME_BASE, cf->next_time ? 0 : AVSEEK_FLAG_BACKWARD)) < 0) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Seek to an invalid time");
         rc = NGX_HTTP_VIDEO_THUMBEXTRACTOR_SECOND_NOT_FOUND;
         goto exit;
     }
@@ -274,53 +329,21 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     av_free_packet(&packet);
 
     if (frameDecoded) {
-        // Convert the image from its native format to RGB
-        struct SwsContext *img_resample_ctx = sws_getContext(pCodecCtx->width, pCodecCtx->height, pCodecCtx->pix_fmt,
-                sws_width, sws_height, PIX_FMT_RGB24, SWS_BICUBIC, NULL, NULL, NULL);
+        rc = NGX_ERROR;
 
-        sws_scale(img_resample_ctx, (const uint8_t * const *) pFrame->data, pFrame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
-        sws_freeContext(img_resample_ctx);
+        /* push the decoded frame into the filtergraph */
+        if (av_buffersrc_add_frame_flags(buffersrc_ctx, pFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) {
+            ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Error while feeding the filtergraph");
+            goto exit;
+        }
 
-        if (needs_crop) {
-            MagickWandGenesis();
-            mrc = MagickTrue;
-
-            if ((m_wand = NewMagickWand()) == NULL){
-                ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not allocate MagickWand memory");
-                mrc = MagickFalse;
-            }
-
-            if (mrc == MagickTrue) {
-                mrc = MagickConstituteImage(m_wand, sws_width, sws_height, NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB, CharPixel, pFrameRGB->data[0]);
-            }
-
-            if (mrc == MagickTrue) {
-                mrc = MagickSetImageGravity(m_wand, CenterGravity);
-            }
-
-            if (mrc == MagickTrue) {
-                mrc = MagickCropImage(m_wand, width, height, (sws_width-width)/2, (sws_height-height)/2);
-            }
-
-            if (mrc == MagickTrue) {
-                mrc = MagickExportImagePixels(m_wand, 0, 0, width, height, NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB, CharPixel, pFrameRGB->data[0]);
-            }
-
-            /* Clean up */
-            if (m_wand) {
-                m_wand = DestroyMagickWand(m_wand);
-            }
-
-            MagickWandTerminus();
-
-            if (mrc != MagickTrue) {
-                ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Error cropping image");
-                goto exit;
-            }
+        if (av_buffersink_get_frame(buffersink_ctx, pFrame) < 0) {
+            ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Error while getting the filtergraph result frame");
+            goto exit;
         }
 
         // Compress to jpeg
-        if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrameRGB->data[0], width * 3, width, height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
+        if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrame->data[0], pFrame->linesize[0], width, height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
             rc = NGX_OK;
         }
     }
@@ -329,15 +352,10 @@ exit:
 
     if ((info->file.fd != NGX_INVALID_FILE) && (ngx_close_file(info->file.fd) == NGX_FILE_ERROR)) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't close file %s", filename);
-        rc = EXIT_FAILURE;
+        rc = NGX_ERROR;
     }
 
     /* destroy unneeded objects */
-
-    // Free the RGB image
-    if (buffer != NULL) av_free(buffer);
-
-    if (pFrameRGB != NULL) av_frame_free(&pFrameRGB);
 
     // Free the YUV frame
     if (pFrame != NULL) av_frame_free(&pFrame);
@@ -346,12 +364,15 @@ exit:
     if (pCodecCtx != NULL) avcodec_close(pCodecCtx);
 
     // Close the video file
-    if (pFormatCtx != NULL) {
-        avformat_close_input(&pFormatCtx);
-    }
+    if (pFormatCtx != NULL) avformat_close_input(&pFormatCtx);
 
     // Free AVIO context
-    if (pAVIOCtx != NULL) av_freep(pAVIOCtx);
+    if (pAVIOCtx != NULL) {
+        if (pAVIOCtx->buffer != NULL) av_freep(&pAVIOCtx->buffer);
+        av_freep(&pAVIOCtx);
+    }
+
+    if (filter_graph != NULL) avfilter_graph_free(&filter_graph);
 
     return rc;
 }
@@ -362,6 +383,7 @@ ngx_http_video_thumbextractor_init_libraries(void)
 {
     // Register all formats and codecs
     av_register_all();
+    avfilter_register_all();
     av_log_set_level(AV_LOG_ERROR);
 }
 
