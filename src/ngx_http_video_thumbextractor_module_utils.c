@@ -33,7 +33,7 @@
 #define NGX_HTTP_VIDEO_THUMBEXTRACTOR_MEMORY_STEP 1024
 #define NGX_HTTP_VIDEO_THUMBEXTRACTOR_RGB         "RGB"
 
-static uint32_t     ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_conf_t *cf, uint8_t * buffer, int out_width, int out_height, caddr_t *out_buffer, size_t *out_len, size_t uncompressed_size, ngx_pool_t *temp_pool);
+static uint32_t     ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_conf_t *cf, uint8_t * buffer, int linesize, int out_width, int out_height, caddr_t *out_buffer, size_t *out_len, size_t uncompressed_size, ngx_pool_t *temp_pool);
 static void         ngx_http_video_thumbextractor_jpeg_memory_dest (j_compress_ptr cinfo, caddr_t *out_buf, size_t *out_size, size_t uncompressed_size, ngx_pool_t *temp_pool);
 
 static ngx_str_t *
@@ -337,7 +337,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
         }
 
         // Compress to jpeg
-        if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrameRGB->data[0], width, height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
+        if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrameRGB->data[0], width * 3, width, height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
             rc = NGX_OK;
         }
     }
@@ -395,12 +395,11 @@ ngx_http_video_thumbextractor_init_libraries(void)
 
 
 static uint32_t
-ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_conf_t *cf, uint8_t * buffer, int out_width, int out_height, caddr_t *out_buffer, size_t *out_len, size_t uncompressed_size, ngx_pool_t *temp_pool)
+ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_conf_t *cf, uint8_t * buffer, int linesize, int out_width, int out_height, caddr_t *out_buffer, size_t *out_len, size_t uncompressed_size, ngx_pool_t *temp_pool)
 {
     struct jpeg_compress_struct cinfo;
     struct jpeg_error_mgr jerr;
     JSAMPROW row_pointer[1];
-    int row_stride;
 
     if ( !buffer ) return 1;
 
@@ -433,9 +432,8 @@ ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_co
 
     jpeg_start_compress(&cinfo, TRUE);
 
-    row_stride = out_width * 3;
     while (cinfo.next_scanline < cinfo.image_height) {
-        row_pointer[0] = &buffer[cinfo.next_scanline * row_stride];
+        row_pointer[0] = &buffer[cinfo.next_scanline * linesize];
         (void)jpeg_write_scanlines(&cinfo, row_pointer,1);
     }
 
