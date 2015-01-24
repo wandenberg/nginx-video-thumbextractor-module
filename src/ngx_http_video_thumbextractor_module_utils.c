@@ -258,7 +258,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     }
 
     if (avfilter_graph_create_filter(&format_ctx, avfilter_get_by_name("format"), NULL, "pix_fmts=rgb24", NULL, filter_graph) < 0) {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error initializing scale filter");
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error initializing format filter");
         goto exit;
     }
 

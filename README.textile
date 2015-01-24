@@ -17,19 +17,19 @@ h1(#requirements). Requirements
 
 This module depends from some libraries (headers and shared objects) which has to be installed before it:
 
-* avformat > 53.5.0 (last tested version: 55.33.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* avcodec > 53.8.0 (last tested versions: 55.52.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* avutil > 52.18.100 (last tested versions: 52.66.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* avfilter >= 4.2.100 (last tested versions: 4.2.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* swscale >= 2.0.0 (last tested versions: 2.5.102) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avformat >= 55.12.100 (last tested version: 55.12.100, 55.33.100, 55.48.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avcodec >= 55.18.102 (last tested versions: 55.18.102, 55.52.102, 55.69.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avutil >= 52.38.100 (last tested versions: 52.38.100, 52.66.100, 52.92.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avfilter >= 3.79.101 (last tested versions: 3.79.101, 4.2.100, 4.11.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* swscale >= 2.3.100 (last tested versions: 2.3.100, 2.5.102, 2.6.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
 * jpeg - "libjpeg":http://libjpeg.sourceforge.net
 
 
 h1(#recommendation). Recommendation
 
-When installing FFmpeg from source do not forget to enable shared libraries using _--enable-shared_
+When installing FFmpeg (last tested versions: 2.0, 2.0.6, 2.2.2, 2.3.2) from source do not forget to enable shared libraries using _--enable-shared_
 
-If you don't install FFmpeg from source you need to be sure that you have headers files for the libs avformat, avcodev, avutil, avfilter and swscale. On Ubuntu, for example you may install libavformat-dev, libavcodec-dev, libavutil-dev, libavfilter-dev and libswscale-dev packages*
+If you don't install FFmpeg from source you need to be sure that you have headers files for the libs.
 
 
 h1(#supported_video_formats). Supported Video Formats
