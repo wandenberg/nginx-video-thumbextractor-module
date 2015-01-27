@@ -40,6 +40,7 @@ static void         ngx_http_video_thumbextractor_jpeg_memory_dest (j_compress_p
 
 int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buf_src_ctx, AVFilterContext **buf_sink_ctx, int width, int height, int second, ngx_log_t *log);
 int filter_frame(AVFilterContext *buffersrc_ctx, AVFilterContext *buffersink_ctx, AVFrame *inFrame, AVFrame *outFrame, ngx_log_t *log);
+int get_frame(ngx_http_video_thumbextractor_loc_conf_t *cf, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, AVFrame *pFrame, int videoStream, int64_t second, ngx_log_t *log);
 
 static ngx_str_t *
 ngx_http_video_thumbextractor_create_str(ngx_pool_t *pool, uint len)
@@ -88,13 +89,12 @@ int ngx_http_video_thumbextractor_read_data_from_file(void *opaque, uint8_t *buf
 static int
 ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_file_info_t *info, int64_t second, ngx_uint_t width, ngx_uint_t height, caddr_t *out_buffer, size_t *out_len, ngx_pool_t *temp_pool, ngx_log_t *log)
 {
-    int              rc, ret, videoStream, frameFinished = 0, frameDecoded = 0;
+    int              rc, ret, videoStream;
     unsigned int     i;
     AVFormatContext *pFormatCtx = NULL;
     AVCodecContext  *pCodecCtx = NULL;
     AVCodec         *pCodec = NULL;
     AVFrame         *pFrame = NULL;
-    AVPacket         packet;
     size_t           uncompressed_size;
     unsigned char   *bufferAVIO = NULL;
     AVIOContext     *pAVIOCtx = NULL;
@@ -215,47 +215,15 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
         goto exit;
     }
 
-    // Determine required buffer size and allocate buffer
-    uncompressed_size = avpicture_get_size(AV_PIX_FMT_RGB24, width, height) * sizeof(uint8_t);
-
-    if ((av_seek_frame(pFormatCtx, -1, second * AV_TIME_BASE, cf->next_time ? 0 : AVSEEK_FLAG_BACKWARD)) < 0) {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Seek to an invalid time");
-        rc = NGX_HTTP_VIDEO_THUMBEXTRACTOR_SECOND_NOT_FOUND;
-        goto exit;
-    }
-
-    int64_t second_on_stream_time_base = second * pFormatCtx->streams[videoStream]->time_base.den / pFormatCtx->streams[videoStream]->time_base.num;
-
-    // Find the nearest frame
-    rc = NGX_HTTP_VIDEO_THUMBEXTRACTOR_SECOND_NOT_FOUND;
-    while (!frameFinished && av_read_frame(pFormatCtx, &packet) >= 0) {
-        // Is this a packet from the video stream?
-        if (packet.stream_index == videoStream) {
-            // Decode video frame
-            avcodec_decode_video2(pCodecCtx, pFrame, &frameFinished, &packet);
-            // Did we get a video frame?
-            if (frameFinished) {
-                frameDecoded = 1;
-                if (!cf->only_keyframe && (pFrame->pkt_pts < second_on_stream_time_base)) {
-                    frameFinished = 0;
-                }
-            }
-        }
-
-        // Free the packet that was allocated by av_read_frame
-        av_free_packet(&packet);
-    }
-    av_free_packet(&packet);
-
-    if (frameDecoded) {
-        rc = NGX_ERROR;
-
+    if ((rc = get_frame(cf, pFormatCtx, pCodecCtx, pFrame, videoStream, second, log)) == 0) {
         if (filter_frame(buffersrc_ctx, buffersink_ctx, pFrame, pFrame, log) < 0) {
+            rc = NGX_ERROR;
             goto exit;
         }
 
-        // Compress to jpeg
-        if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrame->data[0], pFrame->linesize[0], width, height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
+        // Convert the image from its native format to JPEG
+        uncompressed_size = avpicture_get_size(AV_PIX_FMT_RGB24, width, height) * sizeof(uint8_t);
+        if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrame->data[0], pFrame->linesize[0], pFrame->width, pFrame->height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
             rc = NGX_OK;
         }
     }
@@ -531,6 +499,43 @@ int filter_frame(AVFilterContext *buffersrc_ctx, AVFilterContext *buffersink_ctx
             ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Error while getting the filtergraph result frame");
         }
     }
+
+    return rc;
+}
+
+
+int get_frame(ngx_http_video_thumbextractor_loc_conf_t *cf, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, AVFrame *pFrame, int videoStream, int64_t second, ngx_log_t *log)
+{
+    AVPacket packet;
+    int      frameFinished = 0;
+    int      rc;
+
+    int64_t second_on_stream_time_base = second * pFormatCtx->streams[videoStream]->time_base.den / pFormatCtx->streams[videoStream]->time_base.num;
+
+    if (av_seek_frame(pFormatCtx, videoStream, second_on_stream_time_base, cf->next_time ? 0 : AVSEEK_FLAG_BACKWARD) < 0) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Seek to an invalid time");
+        return NGX_HTTP_VIDEO_THUMBEXTRACTOR_SECOND_NOT_FOUND;
+    }
+
+    rc = NGX_HTTP_VIDEO_THUMBEXTRACTOR_SECOND_NOT_FOUND;
+    // Find the nearest frame
+    while (!frameFinished && av_read_frame(pFormatCtx, &packet) >= 0) {
+        // Is this a packet from the video stream?
+        if (packet.stream_index == videoStream) {
+            // Decode video frame
+            avcodec_decode_video2(pCodecCtx, pFrame, &frameFinished, &packet);
+            // Did we get a video frame?
+            if (frameFinished) {
+                rc = NGX_OK;
+                if (!cf->only_keyframe && (pFrame->pkt_pts < second_on_stream_time_base)) {
+                    frameFinished = 0;
+                }
+            }
+        }
+        // Free the packet that was allocated by av_read_frame
+        av_free_packet(&packet);
+    }
+    av_free_packet(&packet);
 
     return rc;
 }
