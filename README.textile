@@ -213,6 +213,12 @@ h1(#contributors). Contributors
 
 h1(#changelog). Changelog
 
+h2(#0_5_0). v0.5.0
+
+* fix jpeg dpi configuration usage
+* remove support to old libav* libraries
+* remove MagickWand dependency which cause memory leak
+
 h2(#0_4_0). v0.4.0
 
 * fix to proper read videos with the moov atom is at the end of the file
