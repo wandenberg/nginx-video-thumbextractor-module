@@ -175,7 +175,7 @@ static ngx_int_t ngx_http_video_thumbextractor_body_filter(ngx_http_request_t *r
     }
 #endif
 
-    if ((rc = ngx_http_video_thumbextractor_get_thumb(vtlcf, &info, ctx->second, ctx->width, ctx->height, &out_buffer, &out_len, r->pool, r->connection->log)) != NGX_OK) {
+    if ((rc = ngx_http_video_thumbextractor_get_thumb(vtlcf, ctx, &info, &out_buffer, &out_len, r->pool, r->connection->log)) != NGX_OK) {
         if (rc == NGX_ERROR) {
             return ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_INTERNAL_SERVER_ERROR);
         }

@@ -20,6 +20,15 @@ module NginxConfiguration
       jpeg_quality: nil,
       jpeg_dpi: nil,
 
+      tile_sample_interval: nil,
+      tile_cols: nil,
+      tile_max_cols: nil,
+      tile_rows: nil,
+      tile_max_rows: nil,
+      tile_margin: nil,
+      tile_padding: nil,
+      tile_color: nil,
+
       extra_location: nil
     }
   end

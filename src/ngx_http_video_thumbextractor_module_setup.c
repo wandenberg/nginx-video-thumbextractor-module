@@ -79,6 +79,54 @@ static ngx_command_t  ngx_http_video_thumbextractor_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_video_thumbextractor_loc_conf_t, image_height),
       NULL },
+    { ngx_string("video_thumbextractor_tile_rows"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_rows),
+      NULL },
+    { ngx_string("video_thumbextractor_tile_max_rows"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_max_rows),
+      NULL },
+    { ngx_string("video_thumbextractor_tile_cols"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_cols),
+      NULL },
+    { ngx_string("video_thumbextractor_tile_max_cols"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_max_cols),
+      NULL },
+    { ngx_string("video_thumbextractor_tile_sample_interval"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_sample_interval),
+      NULL },
+    { ngx_string("video_thumbextractor_tile_margin"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_margin),
+      NULL },
+    { ngx_string("video_thumbextractor_tile_padding"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_padding),
+      NULL },
+    { ngx_string("video_thumbextractor_tile_color"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_str_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_color),
+      NULL },
     { ngx_string("video_thumbextractor_jpeg_baseline"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_conf_set_num_slot,
@@ -164,6 +212,14 @@ ngx_http_video_thumbextractor_create_loc_conf(ngx_conf_t *cf)
     conf->video_second = NULL;
     conf->image_width = NULL;
     conf->image_height = NULL;
+    conf->tile_sample_interval = NGX_CONF_UNSET_UINT;
+    conf->tile_cols = NGX_CONF_UNSET_UINT;
+    conf->tile_max_cols = NGX_CONF_UNSET_UINT;
+    conf->tile_rows = NGX_CONF_UNSET_UINT;
+    conf->tile_max_rows = NGX_CONF_UNSET_UINT;
+    conf->tile_margin = NGX_CONF_UNSET_UINT;
+    conf->tile_padding = NGX_CONF_UNSET_UINT;
+    ngx_str_null(&conf->tile_color);
     conf->jpeg_baseline = NGX_CONF_UNSET_UINT;
     conf->jpeg_progressive_mode = NGX_CONF_UNSET_UINT;
     conf->jpeg_optimize = NGX_CONF_UNSET_UINT;
@@ -200,6 +256,15 @@ ngx_http_video_thumbextractor_merge_loc_conf(ngx_conf_t *cf, void *parent, void 
     if (conf->image_height == NULL) {
         conf->image_height = prev->image_height;
     }
+
+    ngx_conf_merge_uint_value(conf->tile_sample_interval, prev->tile_sample_interval, NGX_CONF_UNSET_UINT);
+    ngx_conf_merge_uint_value(conf->tile_cols, prev->tile_cols, NGX_CONF_UNSET_UINT);
+    ngx_conf_merge_uint_value(conf->tile_max_cols, prev->tile_max_cols, NGX_CONF_UNSET_UINT);
+    ngx_conf_merge_uint_value(conf->tile_rows, prev->tile_rows, NGX_CONF_UNSET_UINT);
+    ngx_conf_merge_uint_value(conf->tile_max_rows, prev->tile_max_rows, NGX_CONF_UNSET_UINT);
+    ngx_conf_merge_uint_value(conf->tile_margin, prev->tile_margin, 0);
+    ngx_conf_merge_uint_value(conf->tile_padding, prev->tile_padding, 0);
+    ngx_conf_merge_str_value(conf->tile_color, prev->tile_color, "black");
 
     ngx_conf_merge_uint_value(conf->jpeg_baseline, prev->jpeg_baseline, 1);
     ngx_conf_merge_uint_value(conf->jpeg_progressive_mode, prev->jpeg_progressive_mode, 0);

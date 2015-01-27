@@ -206,12 +206,144 @@ h2(#video_thumbextractor_next_time). video_thumbextractor_next_time
 Set if will use the previous or the next keyframe considering the requested time when configured to use only the keyframes.
 
 
+h2(#video_thumbextractor_tile_rows). video_thumbextractor_tile_rows
+
+*syntax:* _video_thumbextractor_tile_rows number_
+
+*default:* _none_
+
+*context:* _http_
+
+*release version:* _0.6.0_
+
+Set the number of rows to be used on tile filter. The number of cols will be calculated using the sample interval, the video duration and the start time used on 'video_second' directive, if not set.
+
+!test/test_video_1_rows.jpg(using only 1 row)!
+
+
+h2(#video_thumbextractor_tile_cols). video_thumbextractor_tile_cols
+
+*syntax:* _video_thumbextractor_tile_cols number_
+
+*default:* _none_
+
+*context:* _http_
+
+*release version:* _0.6.0_
+
+Set the number of cols to be used on tile filter. The number of rows will be calculated using the sample interval, the video duration and the start time used on 'video_second' directive, if not set.
+
+!test/test_video_2_cols.jpg(using 2 cols)!
+
+
+h2(#video_thumbextractor_tile_max_rows). video_thumbextractor_tile_max_rows
+
+*syntax:* _video_thumbextractor_tile_max_rows number_
+
+*default:* _none_
+
+*context:* _http_
+
+*release version:* _0.6.0_
+
+Set the max number of rows to be used on tile filter when only the number of cols was set. After calculate the number of necessary rows it can be limited by the configured max number of rows.
+
+!test/test_video_2_cols_2s_interval_2_max_rows.jpg(using 2 cols limited on up to 2 rows)!
+
+
+h2(#video_thumbextractor_tile_max_cols). video_thumbextractor_tile_max_cols
+
+*syntax:* _video_thumbextractor_tile_max_cols number_
+
+*default:* _none_
+
+*context:* _http_
+
+*release version:* _0.6.0_
+
+Set the max number of cols to be used on tile filter when only the number of rows was set. After calculate the number of necessary cols it can be limited by the configured max number of cols.
+
+!test/test_video_1_rows_2s_interval_5_max_cols.jpg(using only 1 row limited on up to 5 cols)!
+
+
+h2(#video_thumbextractor_tile_sample_interval). video_thumbextractor_tile_sample_interval
+
+*syntax:* _video_thumbextractor_tile_sample_interval number_
+
+*default:* _none_
+
+*context:* _http_
+
+*release version:* _0.6.0_
+
+Set the sample interval to get the frames for tile. When it was not set and the number of cols and rows were, the sample interval will be calculated to the video can fit on the tile layout.
+When only the number of rows or the number of cols was set and sample interval was not, the module will use the default value of 5 seconds.
+To the interval be respected you should set video_thumbextractor_only_keyframe directive to off.
+
+!test/test_video_2_cols_2s_interval.jpg(using 2 cols and 2 seconds of interval)!
+
+!test/test_video_1_rows_2s_interval.jpg(using 1 row and 2 seconds of interval)!
+
+!test/test_video_4_cols_4_rows.jpg(using 4 rows, 4 cols and calculated sample interval)!
+
+!test/test_video_4_cols_4_rows_3s_interval.jpg(using  4 rows, 4 cols and 3 seconds of interval)!
+
+
+h2(#video_thumbextractor_tile_color). video_thumbextractor_tile_color
+
+*syntax:* _video_thumbextractor_tile_color string_
+
+*default:* _none_
+
+*context:* _http_
+
+*release version:* _0.6.0_
+
+Set the color to be used on the background. Valid values are defined "here":https://ffmpeg.org/ffmpeg-utils.html#Color
+
+!test/test_video_2_cols_bg_color.jpg(using #EEAA33 as background color)!
+
+
+h2(#video_thumbextractor_tile_margin). video_thumbextractor_tile_margin
+
+*syntax:* _video_thumbextractor_tile_margin number_
+
+*default:* _none_
+
+*context:* _http_
+
+*release version:* _0.6.0_
+
+Set the size of the margin to be used on the final image.
+
+!test/test_video_2_cols_2_rows_5_margin.jpg(using 5px of margin)!
+
+
+h2(#video_thumbextractor_tile_padding). video_thumbextractor_tile_padding
+
+*syntax:* _video_thumbextractor_tile_padding number_
+
+*default:* _none_
+
+*context:* _http_
+
+*release version:* _0.6.0_
+
+Set the size of the padding to be used between the frames.
+
+!test/test_video_2_cols_2_rows_3_padding.jpg(using 3px of padding)!
+
+
 h1(#contributors). Contributors
 
 "People":contributors
 
 
 h1(#changelog). Changelog
+
+h2(#0_6_0). v0.6.0
+
+* add support to tile filter, used to make story boards or sprites
 
 h2(#0_5_0). v0.5.0
 

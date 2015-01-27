@@ -45,6 +45,15 @@ http {
       <%= write_directive("video_thumbextractor_jpeg_quality", jpeg_quality) %>
       <%= write_directive("video_thumbextractor_jpeg_dpi", jpeg_dpi) %>
 
+      <%= write_directive("video_thumbextractor_tile_sample_interval", tile_sample_interval) %>
+      <%= write_directive("video_thumbextractor_tile_cols", tile_cols) %>
+      <%= write_directive("video_thumbextractor_tile_max_cols", tile_max_cols) %>
+      <%= write_directive("video_thumbextractor_tile_rows", tile_rows) %>
+      <%= write_directive("video_thumbextractor_tile_max_rows", tile_max_rows) %>
+      <%= write_directive("video_thumbextractor_tile_margin", tile_margin) %>
+      <%= write_directive("video_thumbextractor_tile_padding", tile_padding) %>
+      <%= write_directive("video_thumbextractor_tile_color", tile_color) %>
+
       root <%= File.expand_path(File.dirname(__FILE__)) %>;
     }
 

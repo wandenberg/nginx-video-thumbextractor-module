@@ -36,6 +36,15 @@ typedef struct {
     ngx_http_complex_value_t               *image_width;
     ngx_http_complex_value_t               *image_height;
 
+    ngx_uint_t                              tile_sample_interval;
+    ngx_uint_t                              tile_cols;
+    ngx_uint_t                              tile_max_cols;
+    ngx_uint_t                              tile_rows;
+    ngx_uint_t                              tile_max_rows;
+    ngx_uint_t                              tile_margin;
+    ngx_uint_t                              tile_padding;
+    ngx_str_t                               tile_color;
+
     ngx_uint_t                              jpeg_baseline;
     ngx_uint_t                              jpeg_progressive_mode;
     ngx_uint_t                              jpeg_optimize;
@@ -50,6 +59,9 @@ typedef struct {
 } ngx_http_video_thumbextractor_loc_conf_t;
 
 typedef struct {
+    ngx_uint_t                              tile_sample_interval;
+    ngx_uint_t                              tile_cols;
+    ngx_uint_t                              tile_rows;
     ngx_int_t                               second;
     ngx_int_t                               width;
     ngx_int_t                               height;

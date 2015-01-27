@@ -38,7 +38,8 @@
 static uint32_t     ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_conf_t *cf, uint8_t * buffer, int linesize, int out_width, int out_height, caddr_t *out_buffer, size_t *out_len, size_t uncompressed_size, ngx_pool_t *temp_pool);
 static void         ngx_http_video_thumbextractor_jpeg_memory_dest (j_compress_ptr cinfo, caddr_t *out_buf, size_t *out_size, size_t uncompressed_size, ngx_pool_t *temp_pool);
 
-int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buf_src_ctx, AVFilterContext **buf_sink_ctx, int width, int height, int second, ngx_log_t *log);
+int setup_parameters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx);
+int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buf_src_ctx, AVFilterContext **buf_sink_ctx, int width, int height, int second, ngx_log_t *log);
 int filter_frame(AVFilterContext *buffersrc_ctx, AVFilterContext *buffersink_ctx, AVFrame *inFrame, AVFrame *outFrame, ngx_log_t *log);
 int get_frame(ngx_http_video_thumbextractor_loc_conf_t *cf, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, AVFrame *pFrame, int videoStream, int64_t second, ngx_log_t *log);
 
@@ -87,7 +88,7 @@ int ngx_http_video_thumbextractor_read_data_from_file(void *opaque, uint8_t *buf
 
 
 static int
-ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_file_info_t *info, int64_t second, ngx_uint_t width, ngx_uint_t height, caddr_t *out_buffer, size_t *out_len, ngx_pool_t *temp_pool, ngx_log_t *log)
+ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, ngx_http_video_thumbextractor_file_info_t *info, caddr_t *out_buffer, size_t *out_len, ngx_pool_t *temp_pool, ngx_log_t *log)
 {
     int              rc, ret, videoStream;
     unsigned int     i;
@@ -103,6 +104,8 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     AVFilterContext *buffersink_ctx;
     AVFilterContext *buffersrc_ctx;
     AVFilterGraph   *filter_graph = NULL;
+    int              need_flush = 0;
+    int64_t          second = ctx->second;
 
     ngx_memzero(&info->file, sizeof(ngx_file_t));
     info->file.name = *info->filename;
@@ -189,21 +192,14 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
         goto exit;
     }
 
-    if (height == 0) {
-        // keep original format
-        width = pCodecCtx->width;
-        height = pCodecCtx->height;
-    } else if (width == 0) {
-        // calculate width related with original aspect
-        width = height * pCodecCtx->width / pCodecCtx->height;
-    }
+    setup_parameters(cf, ctx, pFormatCtx, pCodecCtx);
 
-    if ((width < 16) || (height < 16)) {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Very small size requested, %d x %d", width, height);
+    if ((ctx->width < 16) || (ctx->height < 16)) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Very small size requested, %d x %d", ctx->width, ctx->height);
         goto exit;
     }
 
-    if (setup_filters(cf, pFormatCtx, pCodecCtx, videoStream, &filter_graph, &buffersrc_ctx, &buffersink_ctx, width, height, second, log) < 0) {
+    if (setup_filters(cf, ctx, pFormatCtx, pCodecCtx, videoStream, &filter_graph, &buffersrc_ctx, &buffersink_ctx, ctx->width, ctx->height, second, log) < 0) {
         goto exit;
     }
 
@@ -215,14 +211,29 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
         goto exit;
     }
 
-    if ((rc = get_frame(cf, pFormatCtx, pCodecCtx, pFrame, videoStream, second, log)) == 0) {
-        if (filter_frame(buffersrc_ctx, buffersink_ctx, pFrame, pFrame, log) < 0) {
-            rc = NGX_ERROR;
+    while ((rc = get_frame(cf, pFormatCtx, pCodecCtx, pFrame, videoStream, second, log)) == 0) {
+        if (filter_frame(buffersrc_ctx, buffersink_ctx, pFrame, pFrame, log) == AVERROR(EAGAIN)) {
+            second += ctx->tile_sample_interval;
+            need_flush = 1;
+            continue;
+        }
+
+        need_flush = 0;
+        break;
+    }
+
+    if (need_flush) {
+        if (filter_frame(buffersrc_ctx, buffersink_ctx, NULL, pFrame, log) < 0) {
             goto exit;
         }
 
+        rc = NGX_OK;
+    }
+
+
+    if (rc == NGX_OK) {
         // Convert the image from its native format to JPEG
-        uncompressed_size = avpicture_get_size(AV_PIX_FMT_RGB24, width, height) * sizeof(uint8_t);
+        uncompressed_size = pFrame->width * pFrame->height * 3;
         if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrame->data[0], pFrame->linesize[0], pFrame->width, pFrame->height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
             rc = NGX_OK;
         }
@@ -360,7 +371,7 @@ static boolean ngx_http_video_thumbextractor_empty_output_buffer (j_compress_ptr
 static void ngx_http_video_thumbextractor_term_destination (j_compress_ptr cinfo)
 {
     ngx_http_video_thumbextractor_jpeg_destination_mgr *dest = (ngx_http_video_thumbextractor_jpeg_destination_mgr *) cinfo->dest;
-    *(dest->size)-=dest->pub.free_in_buffer;
+    *(dest->size) -= dest->pub.free_in_buffer;
 }
 
 
@@ -384,12 +395,55 @@ ngx_http_video_thumbextractor_jpeg_memory_dest (j_compress_ptr cinfo, caddr_t *o
 }
 
 
-int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buffersrc_ctx, AVFilterContext **buffersink_ctx, int width, int height, int second, ngx_log_t *log)
+int setup_parameters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx)
+{
+    if (ctx->height == 0) {
+        // keep original format
+        ctx->width = pCodecCtx->width;
+        ctx->height = pCodecCtx->height;
+    } else if (ctx->width == 0) {
+        // calculate width related with original aspect
+        ctx->width = ctx->height * pCodecCtx->width / pCodecCtx->height;
+    }
+
+    ctx->tile_sample_interval = cf->tile_sample_interval;
+    ctx->tile_rows = cf->tile_rows;
+    ctx->tile_cols = cf->tile_cols;
+
+    if (ctx->tile_sample_interval == NGX_CONF_UNSET_UINT) {
+        ctx->tile_sample_interval = 5;
+    }
+
+    if ((cf->tile_rows != NGX_CONF_UNSET_UINT) && (cf->tile_cols != NGX_CONF_UNSET_UINT)) {
+        if (cf->tile_sample_interval == NGX_CONF_UNSET_UINT) {
+            ctx->tile_sample_interval = (pFormatCtx->duration > 0) ? (((pFormatCtx->duration / AV_TIME_BASE) - ctx->second) / (ctx->tile_rows * ctx->tile_cols)) + 1 : 5;
+        }
+    } else if (cf->tile_rows != NGX_CONF_UNSET_UINT) {
+        ctx->tile_cols = (pFormatCtx->duration > 0) ? (((pFormatCtx->duration / AV_TIME_BASE) - ctx->second) / (ctx->tile_rows * ctx->tile_sample_interval)) + 1 : 1;
+        if (cf->tile_max_cols != NGX_CONF_UNSET_UINT) {
+            ctx->tile_cols = ngx_min(ctx->tile_cols, cf->tile_max_cols);
+        }
+    } else if (cf->tile_cols != NGX_CONF_UNSET_UINT) {
+        ctx->tile_rows = (pFormatCtx->duration > 0) ? (((pFormatCtx->duration / AV_TIME_BASE) - ctx->second) / (ctx->tile_cols * ctx->tile_sample_interval)) + 1 : 1;
+        if (cf->tile_max_rows != NGX_CONF_UNSET_UINT) {
+            ctx->tile_rows = ngx_min(ctx->tile_rows, cf->tile_max_rows);
+        }
+    } else {
+        ctx->tile_rows = 1;
+        ctx->tile_cols = 1;
+    }
+
+    return NGX_OK;
+}
+
+
+int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buffersrc_ctx, AVFilterContext **buffersink_ctx, int width, int height, int second, ngx_log_t *log)
 {
     AVFilterGraph   *filter_graph;
 
     AVFilterContext *scale_ctx;
     AVFilterContext *crop_ctx;
+    AVFilterContext *tile_ctx;
     AVFilterContext *format_ctx;
 
     int              rc = 0;
@@ -448,6 +502,12 @@ int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, AVFormatContext 
         }
     }
 
+    ngx_snprintf((u_char *) args, sizeof(args), "%dx%d:margin=%d:padding=%d:color=%V%Z", ctx->tile_cols, ctx->tile_rows, cf->tile_margin, cf->tile_padding, &cf->tile_color);
+    if (avfilter_graph_create_filter(&tile_ctx, avfilter_get_by_name("tile"), NULL, args, NULL, filter_graph) < 0) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error initializing tile filter");
+        return NGX_ERROR;
+    }
+
     if (avfilter_graph_create_filter(&format_ctx, avfilter_get_by_name("format"), NULL, "pix_fmts=rgb24", NULL, filter_graph) < 0) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error initializing format filter");
         return NGX_ERROR;
@@ -464,11 +524,12 @@ int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, AVFormatContext 
 
     if (needs_crop) {
         if (rc >= 0) rc = avfilter_link(scale_ctx, 0, crop_ctx, 0);
-        if (rc >= 0) rc = avfilter_link(crop_ctx, 0, format_ctx, 0);
+        if (rc >= 0) rc = avfilter_link(crop_ctx, 0, tile_ctx, 0);
     } else {
-        if (rc >= 0) rc = avfilter_link(scale_ctx, 0, format_ctx, 0);
+        if (rc >= 0) rc = avfilter_link(scale_ctx, 0, tile_ctx, 0);
     }
 
+    if (rc >= 0) rc = avfilter_link(tile_ctx, 0, format_ctx, 0);
     if (rc >= 0) rc = avfilter_link(format_ctx, 0, *buffersink_ctx, 0);
 
     if (rc < 0) {
@@ -511,6 +572,10 @@ int get_frame(ngx_http_video_thumbextractor_loc_conf_t *cf, AVFormatContext *pFo
     int      rc;
 
     int64_t second_on_stream_time_base = second * pFormatCtx->streams[videoStream]->time_base.den / pFormatCtx->streams[videoStream]->time_base.num;
+
+    if ((pFormatCtx->duration > 0) && ((((float_t) pFormatCtx->duration / AV_TIME_BASE) - second)) < 0.1) {
+        return NGX_HTTP_VIDEO_THUMBEXTRACTOR_SECOND_NOT_FOUND;
+    }
 
     if (av_seek_frame(pFormatCtx, videoStream, second_on_stream_time_base, cf->next_time ? 0 : AVSEEK_FLAG_BACKWARD) < 0) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Seek to an invalid time");
