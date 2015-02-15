@@ -106,6 +106,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     AVFilterGraph   *filter_graph = NULL;
     int              need_flush = 0;
     int64_t          second = ctx->second;
+    char             value[10];
 
     ngx_memzero(&info->file, sizeof(ngx_file_t));
     info->file.name = *info->filename;
@@ -186,8 +187,12 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
         goto exit;
     }
 
+    AVDictionary *dict = NULL;
+    ngx_sprintf((u_char *) value, "%V%Z", &cf->threads);
+    av_dict_set(&dict, "threads", value, 0);
+
     // Open codec
-    if ((avcodec_open2(pCodecCtx, pCodec, NULL)) < 0) {
+    if ((avcodec_open2(pCodecCtx, pCodec, &dict)) < 0) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not open codec");
         goto exit;
     }

@@ -334,6 +334,19 @@ Set the size of the padding to be used between the frames.
 !test/test_video_2_cols_2_rows_3_padding.jpg(using 3px of padding)!
 
 
+h2(#video_thumbextractor_threads). video_thumbextractor_threads
+
+*syntax:* _video_thumbextractor_threads string_
+
+*default:* _auto_
+
+*context:* _http_
+
+*release version:* _0.6.0_
+
+Set the number of threads used by avcodec.
+
+
 h1(#contributors). Contributors
 
 "People":contributors
@@ -344,6 +357,7 @@ h1(#changelog). Changelog
 h2(#0_6_0). v0.6.0
 
 * add support to tile filter, used to make story boards or sprites
+* add directive to control the number of threads used by avcodec
 
 h2(#0_5_0). v0.5.0
 

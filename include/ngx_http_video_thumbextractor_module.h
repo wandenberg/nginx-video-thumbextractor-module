@@ -55,6 +55,8 @@ typedef struct {
     ngx_flag_t                              only_keyframe;
     ngx_flag_t                              next_time;
 
+    ngx_str_t                               threads;
+
     ngx_flag_t                              enabled;
 } ngx_http_video_thumbextractor_loc_conf_t;
 
