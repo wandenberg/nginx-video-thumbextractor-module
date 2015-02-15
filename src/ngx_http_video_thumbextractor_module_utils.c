@@ -39,7 +39,7 @@ static uint32_t     ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_t
 static void         ngx_http_video_thumbextractor_jpeg_memory_dest (j_compress_ptr cinfo, caddr_t *out_buf, size_t *out_size, size_t uncompressed_size, ngx_pool_t *temp_pool);
 
 int setup_parameters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx);
-int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buf_src_ctx, AVFilterContext **buf_sink_ctx, int width, int height, int second, ngx_log_t *log);
+int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buf_src_ctx, AVFilterContext **buf_sink_ctx, ngx_log_t *log);
 int filter_frame(AVFilterContext *buffersrc_ctx, AVFilterContext *buffersink_ctx, AVFrame *inFrame, AVFrame *outFrame, ngx_log_t *log);
 int get_frame(ngx_http_video_thumbextractor_loc_conf_t *cf, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, AVFrame *pFrame, int videoStream, int64_t second, ngx_log_t *log);
 
@@ -185,12 +185,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
 
     setup_parameters(cf, ctx, pFormatCtx, pCodecCtx);
 
-    if ((ctx->width < 16) || (ctx->height < 16)) {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Very small size requested, %d x %d", ctx->width, ctx->height);
-        goto exit;
-    }
-
-    if (setup_filters(cf, ctx, pFormatCtx, pCodecCtx, videoStream, &filter_graph, &buffersrc_ctx, &buffersink_ctx, ctx->width, ctx->height, second, log) < 0) {
+    if (setup_filters(cf, ctx, pFormatCtx, pCodecCtx, videoStream, &filter_graph, &buffersrc_ctx, &buffersink_ctx, log) < 0) {
         goto exit;
     }
 
@@ -401,14 +396,7 @@ int display_width(AVCodecContext *pCodecCtx)
 
 int setup_parameters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx)
 {
-    if (ctx->height == 0) {
-        // keep original format
-        ctx->width = display_width(pCodecCtx);
-        ctx->height = pCodecCtx->height;
-    } else if (ctx->width == 0) {
-        // calculate width related with original aspect
-        ctx->width = ctx->height * display_aspect_ratio(pCodecCtx);
-    }
+    int64_t remainingTime = ((pFormatCtx->duration / AV_TIME_BASE) - ctx->second);
 
     ctx->tile_sample_interval = cf->tile_sample_interval;
     ctx->tile_rows = cf->tile_rows;
@@ -420,15 +408,15 @@ int setup_parameters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_vide
 
     if ((cf->tile_rows != NGX_CONF_UNSET_UINT) && (cf->tile_cols != NGX_CONF_UNSET_UINT)) {
         if (cf->tile_sample_interval == NGX_CONF_UNSET_UINT) {
-            ctx->tile_sample_interval = (pFormatCtx->duration > 0) ? (((pFormatCtx->duration / AV_TIME_BASE) - ctx->second) / (ctx->tile_rows * ctx->tile_cols)) + 1 : 5;
+            ctx->tile_sample_interval = (pFormatCtx->duration > 0) ? (remainingTime / (ctx->tile_rows * ctx->tile_cols)) + 1 : 5;
         }
     } else if (cf->tile_rows != NGX_CONF_UNSET_UINT) {
-        ctx->tile_cols = (pFormatCtx->duration > 0) ? (((pFormatCtx->duration / AV_TIME_BASE) - ctx->second) / (ctx->tile_rows * ctx->tile_sample_interval)) + 1 : 1;
+        ctx->tile_cols = (pFormatCtx->duration > 0) ? (remainingTime / (ctx->tile_rows * ctx->tile_sample_interval)) + 1 : 1;
         if (cf->tile_max_cols != NGX_CONF_UNSET_UINT) {
             ctx->tile_cols = ngx_min(ctx->tile_cols, cf->tile_max_cols);
         }
     } else if (cf->tile_cols != NGX_CONF_UNSET_UINT) {
-        ctx->tile_rows = (pFormatCtx->duration > 0) ? (((pFormatCtx->duration / AV_TIME_BASE) - ctx->second) / (ctx->tile_cols * ctx->tile_sample_interval)) + 1 : 1;
+        ctx->tile_rows = (pFormatCtx->duration > 0) ? (remainingTime / (ctx->tile_cols * ctx->tile_sample_interval)) + 1 : 1;
         if (cf->tile_max_rows != NGX_CONF_UNSET_UINT) {
             ctx->tile_rows = ngx_min(ctx->tile_rows, cf->tile_max_rows);
         }
@@ -441,10 +429,12 @@ int setup_parameters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_vide
 }
 
 
-int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buffersrc_ctx, AVFilterContext **buffersink_ctx, int width, int height, int second, ngx_log_t *log)
+int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buffersrc_ctx, AVFilterContext **buffersink_ctx, ngx_log_t *log)
 {
     AVFilterGraph   *filter_graph;
 
+    AVFilterContext *transpose_ctx;
+    AVFilterContext *transpose_cw_ctx;
     AVFilterContext *scale_ctx;
     AVFilterContext *crop_ctx;
     AVFilterContext *tile_ctx;
@@ -454,22 +444,54 @@ int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_t
     char             args[512];
 
     unsigned int     needs_crop = 0;
-    float            scale = 0.0, new_scale = 0.0, scale_sws = 0.0, scale_w = 0.0, scale_h = 0.0;
-    int              sws_width = 0, sws_height = 0;
+    float            new_aspect_ratio = 0.0, scale_sws = 0.0, scale_w = 0.0, scale_h = 0.0;
+    int              scale_width = 0, scale_height = 0;
 
-    scale     = display_aspect_ratio(pCodecCtx);
-    new_scale = (float) width / height;
+    unsigned int     rotate90 = 0, rotate180 = 0, rotate270 = 0;
 
-    sws_width = width;
-    sws_height = height;
+    AVDictionaryEntry *rotate = av_dict_get(pFormatCtx->streams[videoStream]->metadata, "rotate", NULL, 0);
+    if (rotate) {
+        rotate90 = strcasecmp(rotate->value, "90") == 0;
+        rotate180 = strcasecmp(rotate->value, "180") == 0;
+        rotate270 = strcasecmp(rotate->value, "270") == 0;
+    }
 
-    if (scale != new_scale) {
-        scale_w = (float) width / display_width(pCodecCtx);
-        scale_h = (float) height / pCodecCtx->height;
+    float aspect_ratio = display_aspect_ratio(pCodecCtx);
+    int width = display_width(pCodecCtx);
+    int height = pCodecCtx->height;
+
+    if (rotate90 || rotate270) {
+        height = width;
+        width = pCodecCtx->height;
+        aspect_ratio = 1.0 / aspect_ratio;
+    }
+
+    if (ctx->height == 0) {
+        // keep original format
+        ctx->width = width;
+        ctx->height = height;
+    } else if (ctx->width == 0) {
+        // calculate width related with original aspect
+        ctx->width = ctx->height * aspect_ratio;
+    }
+
+    if ((ctx->width < 16) || (ctx->height < 16)) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Very small size requested, %d x %d", ctx->width, ctx->height);
+        return NGX_ERROR;
+    }
+
+    new_aspect_ratio = (float) ctx->width / ctx->height;
+
+    scale_width = ctx->width;
+    scale_height = ctx->height;
+
+    if (aspect_ratio != new_aspect_ratio) {
+        scale_w = (float) ctx->width / width;
+        scale_h = (float) ctx->height / height;
         scale_sws = (scale_w > scale_h) ? scale_w : scale_h;
 
-        sws_width = display_width(pCodecCtx) * scale_sws + 0.5;
-        sws_height = pCodecCtx->height * scale_sws + 0.5;
+        scale_width = width * scale_sws + 0.5;
+        scale_height = height * scale_sws + 0.5;
 
         needs_crop = 1;
     }
@@ -492,14 +514,24 @@ int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_t
         return NGX_ERROR;
     }
 
-    snprintf(args, sizeof(args), "%d:%d:flags=bicubic", sws_width, sws_height);
+    if ((rotate90 || rotate180 || rotate270) && (avfilter_graph_create_filter(&transpose_ctx, avfilter_get_by_name("transpose"), NULL, rotate270 ? "2" : "1", NULL, filter_graph) < 0)) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error initializing transpose filter");
+        return NGX_ERROR;
+    }
+
+    if (rotate180 && (avfilter_graph_create_filter(&transpose_cw_ctx, avfilter_get_by_name("transpose"), NULL, "1", NULL, filter_graph) < 0)) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error initializing transpose filter");
+        return NGX_ERROR;
+    }
+
+    snprintf(args, sizeof(args), "%d:%d:flags=bicubic", scale_width, scale_height);
     if (avfilter_graph_create_filter(&scale_ctx, avfilter_get_by_name("scale"), NULL, args, NULL, filter_graph) < 0) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error initializing scale filter");
         return NGX_ERROR;
     }
 
     if (needs_crop) {
-        snprintf(args, sizeof(args), "%d:%d", width, height);
+        snprintf(args, sizeof(args), "%d:%d", (int) ctx->width, (int) ctx->height);
         if (avfilter_graph_create_filter(&crop_ctx, avfilter_get_by_name("crop"), NULL, args, NULL, filter_graph) < 0) {
             ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error initializing crop filter");
             return NGX_ERROR;
@@ -524,7 +556,17 @@ int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_t
     }
 
     // connect inputs and outputs
-    rc = avfilter_link(*buffersrc_ctx, 0, scale_ctx, 0);
+    if (rotate) {
+        rc = avfilter_link(*buffersrc_ctx, 0, transpose_ctx, 0);
+        if (rotate180) {
+            if (rc >= 0) rc = avfilter_link(transpose_ctx, 0, transpose_cw_ctx, 0);
+            if (rc >= 0) rc = avfilter_link(transpose_cw_ctx, 0, scale_ctx, 0);
+        } else {
+            if (rc >= 0) rc = avfilter_link(transpose_ctx, 0, scale_ctx, 0);
+        }
+    } else {
+        rc = avfilter_link(*buffersrc_ctx, 0, scale_ctx, 0);
+    }
 
     if (needs_crop) {
         if (rc >= 0) rc = avfilter_link(scale_ctx, 0, crop_ctx, 0);

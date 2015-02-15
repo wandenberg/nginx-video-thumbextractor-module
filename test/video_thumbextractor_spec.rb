@@ -57,6 +57,29 @@ describe "when getting a thumb" do
       end
     end
 
+    context "when the video stream has rotate metadata" do
+      it "should rotate by 90 degrees when asked for" do
+        nginx_run_server(only_keyframe: 'off') do
+          content = image('/test_video_rotate_90.mp4?second=2&height=56', {}, "200")
+          expect(content).to eq(IO.binread('test_video_rotate_90.jpg'))
+        end
+      end
+
+      it "should rotate by 180 degrees when asked for" do
+        nginx_run_server(only_keyframe: 'off') do
+          content = image('/test_video_rotate_180.mp4?second=2&height=56', {}, "200")
+          expect(content).to eq(IO.binread('test_video_rotate_180.jpg'))
+        end
+      end
+
+      it "should rotate by 270 degrees when asked for" do
+        nginx_run_server(only_keyframe: 'off') do
+          content = image('/test_video_rotate_270.mp4?second=2&height=56', {}, "200")
+          expect(content).to eq(IO.binread('test_video_rotate_270.jpg'))
+        end
+      end
+    end
+
     context "when the requested second is on the end of the video" do
       context "and using only_keyframe with previous time" do
         it "should return a 200" do
