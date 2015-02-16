@@ -39,6 +39,24 @@ describe "when getting a thumb" do
       end
     end
 
+    context "when the video has sample aspect ratio less than 1" do
+      it "should use the display dimensions as true dimensions" do
+        nginx_run_server(only_keyframe: 'off') do
+          content = image('/test_video_aspect_lt_1.mp4?second=2&height=90', {}, "200")
+          expect(content).to eq(IO.binread('test_video_aspect_lt_1.jpg'))
+        end
+      end
+    end
+
+    context "when the video has sample aspect ratio greater than 1" do
+      it "should use the display dimensions as true dimensions" do
+        nginx_run_server(only_keyframe: 'off') do
+          content = image('/test_video_aspect_gt_1.mp4?second=2&height=90', {}, "200")
+          expect(content).to eq(IO.binread('test_video_aspect_gt_1.jpg'))
+        end
+      end
+    end
+
     context "when the requested second is on the end of the video" do
       context "and using only_keyframe with previous time" do
         it "should return a 200" do

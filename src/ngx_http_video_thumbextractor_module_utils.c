@@ -386,15 +386,28 @@ ngx_http_video_thumbextractor_jpeg_memory_dest (j_compress_ptr cinfo, caddr_t *o
 }
 
 
+float display_aspect_ratio(AVCodecContext *pCodecCtx)
+{
+    double aspect_ratio = av_q2d(pCodecCtx->sample_aspect_ratio);
+    return ((float) pCodecCtx->width / pCodecCtx->height) * (aspect_ratio ? aspect_ratio : 1);
+}
+
+
+int display_width(AVCodecContext *pCodecCtx)
+{
+    return pCodecCtx->height * display_aspect_ratio(pCodecCtx);
+}
+
+
 int setup_parameters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx)
 {
     if (ctx->height == 0) {
         // keep original format
-        ctx->width = pCodecCtx->width;
+        ctx->width = display_width(pCodecCtx);
         ctx->height = pCodecCtx->height;
     } else if (ctx->width == 0) {
         // calculate width related with original aspect
-        ctx->width = ctx->height * pCodecCtx->width / pCodecCtx->height;
+        ctx->width = ctx->height * display_aspect_ratio(pCodecCtx);
     }
 
     ctx->tile_sample_interval = cf->tile_sample_interval;
@@ -444,18 +457,18 @@ int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_t
     float            scale = 0.0, new_scale = 0.0, scale_sws = 0.0, scale_w = 0.0, scale_h = 0.0;
     int              sws_width = 0, sws_height = 0;
 
-    scale     = (float) pCodecCtx->width / pCodecCtx->height;
+    scale     = display_aspect_ratio(pCodecCtx);
     new_scale = (float) width / height;
 
     sws_width = width;
     sws_height = height;
 
     if (scale != new_scale) {
-        scale_w = (float) width / pCodecCtx->width;
+        scale_w = (float) width / display_width(pCodecCtx);
         scale_h = (float) height / pCodecCtx->height;
         scale_sws = (scale_w > scale_h) ? scale_w : scale_h;
 
-        sws_width = pCodecCtx->width * scale_sws + 0.5;
+        sws_width = display_width(pCodecCtx) * scale_sws + 0.5;
         sws_height = pCodecCtx->height * scale_sws + 0.5;
 
         needs_crop = 1;
