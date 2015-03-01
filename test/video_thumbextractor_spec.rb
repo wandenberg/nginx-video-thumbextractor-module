@@ -8,7 +8,7 @@ describe "when getting a thumb" do
     it "should return a image" do
       nginx_run_server do
         content = image('/test_video.mp4?second=2', {}, "200")
-        expect(content).to eq(IO.binread('test_video_640_x_360.jpg'))
+        expect(content).to be_perceptual_equal_to('test_video_640_x_360.jpg')
       end
     end
 
@@ -34,7 +34,7 @@ describe "when getting a thumb" do
       it "should use the best video stream available" do
         nginx_run_server(only_keyframe: 'off') do
           content = image('/test_video_multiple_video_streams.mp4?second=2&height=90', {}, "200")
-          expect(content).to eq(IO.binread('test_video_multiple_video_streams.jpg'))
+          expect(content).to be_perceptual_equal_to('test_video_multiple_video_streams.jpg')
         end
       end
     end
@@ -43,7 +43,7 @@ describe "when getting a thumb" do
       it "should use the display dimensions as true dimensions" do
         nginx_run_server(only_keyframe: 'off') do
           content = image('/test_video_aspect_lt_1.mp4?second=2&height=90', {}, "200")
-          expect(content).to eq(IO.binread('test_video_aspect_lt_1.jpg'))
+          expect(content).to be_perceptual_equal_to('test_video_aspect_lt_1.jpg')
         end
       end
     end
@@ -52,7 +52,7 @@ describe "when getting a thumb" do
       it "should use the display dimensions as true dimensions" do
         nginx_run_server(only_keyframe: 'off') do
           content = image('/test_video_aspect_gt_1.mp4?second=2&height=90', {}, "200")
-          expect(content).to eq(IO.binread('test_video_aspect_gt_1.jpg'))
+          expect(content).to be_perceptual_equal_to('test_video_aspect_gt_1.jpg')
         end
       end
     end
@@ -61,21 +61,21 @@ describe "when getting a thumb" do
       it "should rotate by 90 degrees when asked for" do
         nginx_run_server(only_keyframe: 'off') do
           content = image('/test_video_rotate_90.mp4?second=2&height=56', {}, "200")
-          expect(content).to eq(IO.binread('test_video_rotate_90.jpg'))
+          expect(content).to be_perceptual_equal_to('test_video_rotate_90.jpg')
         end
       end
 
       it "should rotate by 180 degrees when asked for" do
         nginx_run_server(only_keyframe: 'off') do
           content = image('/test_video_rotate_180.mp4?second=2&height=56', {}, "200")
-          expect(content).to eq(IO.binread('test_video_rotate_180.jpg'))
+          expect(content).to be_perceptual_equal_to('test_video_rotate_180.jpg')
         end
       end
 
       it "should rotate by 270 degrees when asked for" do
         nginx_run_server(only_keyframe: 'off') do
           content = image('/test_video_rotate_270.mp4?second=2&height=56', {}, "200")
-          expect(content).to eq(IO.binread('test_video_rotate_270.jpg'))
+          expect(content).to be_perceptual_equal_to('test_video_rotate_270.jpg')
         end
       end
     end
@@ -202,7 +202,7 @@ describe "when getting a thumb" do
       it "should ignore width if only this dimension is specified" do
         nginx_run_server do
           content = image('/test_video.mp4?second=2&width=100', {}, "200")
-          expect(content).to eq(IO.binread('test_video_640_x_360.jpg'))
+          expect(content).to be_perceptual_equal_to('test_video_640_x_360.jpg')
         end
       end
     end
@@ -237,21 +237,21 @@ describe "when getting a thumb" do
       it "should return an image with relative size if only height is given" do
         nginx_run_server(image_height: "$arg_height$http_x_height") do
           content = image('/test_video.mp4?second=2&height=270')
-          expect(content).to eq(IO.binread('test_video_480_x_270.jpg'))
+          expect(content).to be_perceptual_equal_to('test_video_480_x_270.jpg')
         end
       end
 
       it "should return an image with specified size if height and width are given" do
         nginx_run_server(image_height: "$arg_height$http_x_height") do
           content = image('/test_video.mp4?second=2&width=200&height=60')
-          expect(content).to eq(IO.binread('test_video_200_x_60.jpg'))
+          expect(content).to be_perceptual_equal_to('test_video_200_x_60.jpg')
         end
       end
 
       it "should accept a different aspect ratio" do
         nginx_run_server(image_height: "$arg_height$http_x_height") do
           content = image('/test_video.mp4?second=2&width=50&height=100')
-          expect(content).to eq(IO.binread('test_video_50_x_100.jpg'))
+          expect(content).to be_perceptual_equal_to('test_video_50_x_100.jpg')
         end
       end
     end
