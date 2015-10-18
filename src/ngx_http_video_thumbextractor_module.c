@@ -32,6 +32,7 @@ ngx_http_output_body_filter_pt ngx_http_video_thumbextractor_next_body_filter;
 
 ngx_int_t ngx_http_video_thumbextractor_extract_and_send_thumb(ngx_http_request_t *r);
 ngx_int_t ngx_http_video_thumbextractor_set_request_context(ngx_http_request_t *r);
+void      ngx_http_video_thumbextractor_cleanup_request_context(ngx_http_request_t *r);
 
 
 static ngx_int_t
@@ -185,6 +186,7 @@ ngx_http_video_thumbextractor_set_request_context(ngx_http_request_t *r)
     ngx_http_video_thumbextractor_loc_conf_t    *vtlcf;
     ngx_http_video_thumbextractor_ctx_t         *ctx;
     ngx_http_video_thumbextractor_thumb_ctx_t   *thumb_ctx;
+    ngx_pool_cleanup_t                          *cln;
     ngx_http_core_loc_conf_t                    *clcf;
     ngx_str_t                                    vv_filename = ngx_null_string, vv_second = ngx_null_string;
     ngx_str_t                                    vv_width = ngx_null_string, vv_height = ngx_null_string;
@@ -197,6 +199,15 @@ ngx_http_video_thumbextractor_set_request_context(ngx_http_request_t *r)
     if (ctx != NULL) {
         return NGX_OK;
     }
+
+    if ((cln = ngx_pool_cleanup_add(r->pool, 0)) == NULL) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "video thumb extractor module: unable to allocate memory for cleanup");
+        return NGX_ERROR;
+    }
+
+    // set a cleaner to request
+    cln->handler = (ngx_pool_cleanup_pt) ngx_http_video_thumbextractor_cleanup_request_context;
+    cln->data = r;
 
     if ((ctx = ngx_pcalloc(r->pool, sizeof(ngx_http_video_thumbextractor_ctx_t))) == NULL) {
         return NGX_ERROR;
@@ -259,4 +270,16 @@ ngx_http_video_thumbextractor_filter_init(ngx_conf_t *cf)
     ngx_http_top_body_filter = ngx_http_video_thumbextractor_body_filter;
 
     return NGX_OK;
+}
+
+
+void
+ngx_http_video_thumbextractor_cleanup_request_context(ngx_http_request_t *r)
+{
+    ngx_http_video_thumbextractor_ctx_t       *ctx = ngx_http_get_module_ctx(r, ngx_http_video_thumbextractor_module);
+
+    r->read_event_handler = ngx_http_request_empty_handler;
+
+    if (ctx != NULL) {
+    }
 }
