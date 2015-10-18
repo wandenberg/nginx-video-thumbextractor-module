@@ -24,7 +24,11 @@
  *
  */
 #include <ngx_http_video_thumbextractor_module_utils.h>
+#include <ngx_http_video_thumbextractor_module_ipc.h>
 #include <ngx_http_video_thumbextractor_module.h>
+
+static void *ngx_http_video_thumbextractor_create_main_conf(ngx_conf_t *cf);
+static char *ngx_http_video_thumbextractor_init_main_conf(ngx_conf_t *cf, void *parent);
 
 static void *ngx_http_video_thumbextractor_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_video_thumbextractor_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child);
@@ -169,6 +173,12 @@ static ngx_command_t  ngx_http_video_thumbextractor_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_video_thumbextractor_loc_conf_t, threads),
       NULL },
+    { ngx_string("video_thumbextractor_processes_per_worker"),
+      NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_MAIN_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_main_conf_t, processes_per_worker),
+      NULL },
       ngx_null_command
 };
 
@@ -176,8 +186,8 @@ static ngx_http_module_t  ngx_http_video_thumbextractor_module_ctx = {
     NULL,                                           /* preconfiguration */
     ngx_http_video_thumbextractor_post_config,      /* postconfiguration */
 
-    NULL,                                           /* create main configuration */
-    NULL,                                           /* init main configuration */
+    ngx_http_video_thumbextractor_create_main_conf, /* create main configuration */
+    ngx_http_video_thumbextractor_init_main_conf,   /* init main configuration */
 
     NULL,                                           /* create server configuration */
     NULL,                                           /* merge server configuration */
@@ -201,6 +211,38 @@ ngx_module_t  ngx_http_video_thumbextractor_module = {
     NULL,                                        /* exit master */
     NGX_MODULE_V1_PADDING
 };
+
+
+static void *
+ngx_http_video_thumbextractor_create_main_conf(ngx_conf_t *cf)
+{
+    ngx_http_video_thumbextractor_main_conf_t    *mcf = ngx_pcalloc(cf->pool, sizeof(ngx_http_video_thumbextractor_main_conf_t));
+
+    if (mcf == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    mcf->processes_per_worker = NGX_CONF_UNSET_UINT;
+
+    return mcf;
+}
+
+
+static char *
+ngx_http_video_thumbextractor_init_main_conf(ngx_conf_t *cf, void *parent)
+{
+
+    ngx_http_video_thumbextractor_main_conf_t     *conf = parent;
+
+    ngx_conf_merge_uint_value(conf->processes_per_worker, NGX_CONF_UNSET_UINT, 1);
+
+    if (conf->processes_per_worker > NGX_MAX_PROCESSES) {
+        ngx_conf_log_error(NGX_LOG_ERR, cf, 0, "video thumbextractor module: video_thumbextractor_processes_per_worker must be less than %d", NGX_MAX_PROCESSES);
+        return NGX_CONF_ERROR;
+    }
+
+    return NGX_CONF_OK;
+}
 
 
 static void *

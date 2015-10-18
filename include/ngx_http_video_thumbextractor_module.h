@@ -31,6 +31,10 @@
 #include <ngx_http.h>
 
 typedef struct {
+    ngx_uint_t                              processes_per_worker;
+} ngx_http_video_thumbextractor_main_conf_t;
+
+typedef struct {
     ngx_http_complex_value_t               *video_filename;
     ngx_http_complex_value_t               *video_second;
     ngx_http_complex_value_t               *image_width;
