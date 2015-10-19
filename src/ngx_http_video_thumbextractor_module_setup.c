@@ -312,8 +312,6 @@ static ngx_int_t
 ngx_http_video_thumbextractor_post_config(ngx_conf_t *cf)
 {
     ngx_int_t                        rc;
-    ngx_http_handler_pt             *h;
-    ngx_http_core_main_conf_t       *cmcf;
 
     if (!ngx_http_video_thumbextractor_used) {
         return NGX_OK;
@@ -323,16 +321,6 @@ ngx_http_video_thumbextractor_post_config(ngx_conf_t *cf)
     if ((rc = ngx_http_video_thumbextractor_filter_init(cf)) != NGX_OK) {
         return rc;
     }
-
-    cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);
-
-    /* register our access phase handler */
-    h = ngx_array_push(&cmcf->phases[NGX_HTTP_ACCESS_PHASE].handlers);
-    if (h == NULL) {
-        return NGX_ERROR;
-    }
-
-    *h = ngx_http_video_thumbextractor_access_handler;
 
     return NGX_OK;
 }
