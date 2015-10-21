@@ -347,12 +347,42 @@ h2(#video_thumbextractor_threads). video_thumbextractor_threads
 Set the number of threads used by avcodec.
 
 
+h2(#video_thumbextractor_processes_per_worker). video_thumbextractor_processes_per_worker
+
+*syntax:* _video_thumbextractor_processes_per_worker number_
+
+*default:* _1_
+
+*context:* _http_
+
+*release version:* _0.7.0_
+
+Set the number of process each nginx worker can fork to extract the thumbs. The requests will be queued until there is an available process.
+
+
 h1(#contributors). Contributors
 
 "People":contributors
 
 
 h1(#changelog). Changelog
+
+h2(#0_7_0). v0.7.0
+
+* add support to execute the thumb extraction in a different process to not block the nginx worker
+* add video_thumbextractor_processes_per_worker directive
+* try to make the code simpler
+* revert the changes on 0.6.2
+
+h2(#0_6_2). v0.6.2
+
+* trying to improve the performance not reading the raw response (the video)
+
+h2(#0_6_1). v0.6.1
+
+* add support to rotate the image when the video stream has instructions to do it
+* add support to videos with different aspect ratio
+* fix support to files with more than one video stream choosing the best of them
 
 h2(#0_6_0). v0.6.0
 
