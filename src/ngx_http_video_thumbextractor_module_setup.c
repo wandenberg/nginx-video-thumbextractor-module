@@ -35,6 +35,7 @@ static char *ngx_http_video_thumbextractor_merge_loc_conf(ngx_conf_t *cf, void *
 
 static ngx_int_t ngx_http_video_thumbextractor_post_config(ngx_conf_t *cf);
 static ngx_int_t ngx_http_video_thumbextractor_init_worker(ngx_cycle_t *cycle);
+static void      ngx_http_video_thumbextractor_exit_worker(ngx_cycle_t *cycle);
 
 static char *ngx_http_video_thumbextractor(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
@@ -207,7 +208,7 @@ ngx_module_t  ngx_http_video_thumbextractor_module = {
     ngx_http_video_thumbextractor_init_worker,   /* init process */
     NULL,                                        /* init thread */
     NULL,                                        /* exit thread */
-    NULL,                                        /* exit process */
+    ngx_http_video_thumbextractor_exit_worker,   /* exit process */
     NULL,                                        /* exit master */
     NGX_MODULE_V1_PADDING
 };
@@ -371,9 +372,39 @@ ngx_http_video_thumbextractor_post_config(ngx_conf_t *cf)
 static ngx_int_t
 ngx_http_video_thumbextractor_init_worker(ngx_cycle_t *cycle)
 {
+    ngx_uint_t i;
+
+    for (i = 0; i < NGX_MAX_PROCESSES; ++i) {
+        ngx_http_video_thumbextractor_module_ipc_ctxs[i].pid = -1;
+        ngx_http_video_thumbextractor_module_ipc_ctxs[i].slot = i;
+    }
+
+    if ((ngx_http_video_thumbextractor_module_extract_queue = ngx_pcalloc(ngx_cycle->pool, sizeof(ngx_queue_t))) == NULL) {
+        ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, 0, "video thumb extractor module: unable to allocate memory to queue of extractions");
+        return NGX_ERROR;
+    }
+
+    ngx_queue_init(ngx_http_video_thumbextractor_module_extract_queue);
+
     ngx_http_video_thumbextractor_init_libraries();
     return NGX_OK;
 }
+
+
+static void
+ngx_http_video_thumbextractor_exit_worker(ngx_cycle_t *cycle)
+{
+    ngx_uint_t                                 i;
+
+    for (i = 0; i < NGX_MAX_PROCESSES; i++) {
+        if (ngx_http_video_thumbextractor_module_ipc_ctxs[i].pid != -1) {
+            ngx_close_socket(ngx_http_video_thumbextractor_module_ipc_ctxs[i].pipefd[0]);
+            ngx_close_socket(ngx_http_video_thumbextractor_module_ipc_ctxs[i].pipefd[1]);
+            kill(ngx_http_video_thumbextractor_module_ipc_ctxs[i].pid, SIGTERM);
+        }
+    }
+}
+
 
 
 static char *
