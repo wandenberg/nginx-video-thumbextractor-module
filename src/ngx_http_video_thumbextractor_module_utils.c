@@ -38,22 +38,10 @@
 static uint32_t     ngx_http_video_thumbextractor_jpeg_compress(ngx_http_video_thumbextractor_loc_conf_t *cf, uint8_t * buffer, int linesize, int out_width, int out_height, caddr_t *out_buffer, size_t *out_len, size_t uncompressed_size, ngx_pool_t *temp_pool);
 static void         ngx_http_video_thumbextractor_jpeg_memory_dest (j_compress_ptr cinfo, caddr_t *out_buf, size_t *out_size, size_t uncompressed_size, ngx_pool_t *temp_pool);
 
-int setup_parameters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx);
-int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buf_src_ctx, AVFilterContext **buf_sink_ctx, ngx_log_t *log);
+int setup_parameters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_thumb_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx);
+int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_thumb_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buf_src_ctx, AVFilterContext **buf_sink_ctx, ngx_log_t *log);
 int filter_frame(AVFilterContext *buffersrc_ctx, AVFilterContext *buffersink_ctx, AVFrame *inFrame, AVFrame *outFrame, ngx_log_t *log);
 int get_frame(ngx_http_video_thumbextractor_loc_conf_t *cf, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, AVFrame *pFrame, int videoStream, int64_t second, ngx_log_t *log);
-
-static ngx_str_t *
-ngx_http_video_thumbextractor_create_str(ngx_pool_t *pool, uint len)
-{
-    ngx_str_t *aux = (ngx_str_t *) ngx_pcalloc(pool, sizeof(ngx_str_t) + len + 1);
-    if (aux != NULL) {
-        aux->data = (u_char *) (aux + 1);
-        aux->len = len;
-        ngx_memset(aux->data, '\0', len + 1);
-    }
-    return aux;
-}
 
 
 int64_t ngx_http_video_thumbextractor_seek_data_from_file(void *opaque, int64_t offset, int whence)
@@ -88,8 +76,9 @@ int ngx_http_video_thumbextractor_read_data_from_file(void *opaque, uint8_t *buf
 
 
 static int
-ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, ngx_http_video_thumbextractor_file_info_t *info, caddr_t *out_buffer, size_t *out_len, ngx_pool_t *temp_pool, ngx_log_t *log)
+ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_thumb_ctx_t *ctx, caddr_t *out_buffer, size_t *out_len, ngx_pool_t *temp_pool, ngx_log_t *log)
 {
+    ngx_http_video_thumbextractor_file_info_t *info = &ctx->file_info;
     int              rc, ret, videoStream;
     AVFormatContext *pFormatCtx = NULL;
     AVCodecContext  *pCodecCtx = NULL;
@@ -98,7 +87,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     size_t           uncompressed_size;
     unsigned char   *bufferAVIO = NULL;
     AVIOContext     *pAVIOCtx = NULL;
-    char            *filename = (char *) info->filename->data;
+    char            *filename = (char *) ctx->filename.data;
     ngx_file_info_t  fi;
     AVFilterContext *buffersink_ctx;
     AVFilterContext *buffersrc_ctx;
@@ -108,7 +97,7 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     char             value[10];
 
     ngx_memzero(&info->file, sizeof(ngx_file_t));
-    info->file.name = *info->filename;
+    info->file.name = ctx->filename;
     info->file.log = log;
 
     rc = NGX_ERROR;
@@ -116,13 +105,13 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     // Open video file
     info->file.fd = ngx_open_file(filename, NGX_FILE_RDONLY, NGX_FILE_OPEN, 0);
     if (info->file.fd == NGX_INVALID_FILE) {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't open file \"%V\"", info->filename);
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Couldn't open file \"%V\"", &ctx->filename);
         rc = NGX_HTTP_VIDEO_THUMBEXTRACTOR_FILE_NOT_FOUND;
         goto exit;
     }
 
     if (ngx_fd_info(info->file.fd, &fi) == NGX_FILE_ERROR) {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: unable to stat file \"%V\"", info->filename);
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: unable to stat file \"%V\"", &ctx->filename);
         goto exit;
     }
 
@@ -394,7 +383,7 @@ int display_width(AVCodecContext *pCodecCtx)
 }
 
 
-int setup_parameters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx)
+int setup_parameters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_thumb_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx)
 {
     int64_t remainingTime = ((pFormatCtx->duration / AV_TIME_BASE) - ctx->second);
 
@@ -429,7 +418,7 @@ int setup_parameters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_vide
 }
 
 
-int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buffersrc_ctx, AVFilterContext **buffersink_ctx, ngx_log_t *log)
+int setup_filters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_video_thumbextractor_thumb_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buffersrc_ctx, AVFilterContext **buffersink_ctx, ngx_log_t *log)
 {
     AVFilterGraph   *filter_graph;
 

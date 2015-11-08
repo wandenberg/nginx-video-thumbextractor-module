@@ -61,21 +61,25 @@ typedef struct {
 } ngx_http_video_thumbextractor_loc_conf_t;
 
 typedef struct {
-    ngx_uint_t                              tile_sample_interval;
-    ngx_uint_t                              tile_cols;
-    ngx_uint_t                              tile_rows;
-    ngx_int_t                               second;
-    ngx_int_t                               width;
-    ngx_int_t                               height;
-    ngx_str_t                              *filename;
-} ngx_http_video_thumbextractor_ctx_t;
-
-typedef struct {
     int64_t                          size;
     int64_t                          offset;
-    ngx_str_t                       *filename;
     ngx_file_t                       file;
 } ngx_http_video_thumbextractor_file_info_t;
+
+typedef struct {
+    ngx_http_video_thumbextractor_file_info_t   file_info;
+    ngx_int_t                                   second;
+    ngx_int_t                                   width;
+    ngx_int_t                                   height;
+    ngx_uint_t                                  tile_sample_interval;
+    ngx_uint_t                                  tile_cols;
+    ngx_uint_t                                  tile_rows;
+    ngx_str_t                                   filename;
+} ngx_http_video_thumbextractor_thumb_ctx_t;
+
+typedef struct {
+    ngx_http_video_thumbextractor_thumb_ctx_t   thumb_ctx;
+} ngx_http_video_thumbextractor_ctx_t;
 
 ngx_int_t ngx_http_video_thumbextractor_access_handler(ngx_http_request_t *r);
 ngx_int_t ngx_http_video_thumbextractor_filter_init(ngx_conf_t *cf);
