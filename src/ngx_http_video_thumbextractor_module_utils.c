@@ -187,6 +187,11 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     }
 
     while ((rc = get_frame(cf, pFormatCtx, pCodecCtx, pFrame, videoStream, second, log)) == 0) {
+        if (pFrame->pict_type == AV_PICTURE_TYPE_NONE) {
+            need_flush = 1;
+            break;
+        }
+
         if (filter_frame(buffersrc_ctx, buffersink_ctx, pFrame, pFrame, log) == AVERROR(EAGAIN)) {
             second += ctx->tile_sample_interval;
             need_flush = 1;
