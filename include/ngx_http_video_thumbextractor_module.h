@@ -40,13 +40,13 @@ typedef struct {
     ngx_http_complex_value_t               *image_width;
     ngx_http_complex_value_t               *image_height;
 
-    ngx_uint_t                              tile_sample_interval;
-    ngx_uint_t                              tile_cols;
-    ngx_uint_t                              tile_max_cols;
-    ngx_uint_t                              tile_rows;
-    ngx_uint_t                              tile_max_rows;
-    ngx_uint_t                              tile_margin;
-    ngx_uint_t                              tile_padding;
+    ngx_http_complex_value_t               *tile_sample_interval;
+    ngx_http_complex_value_t               *tile_cols;
+    ngx_http_complex_value_t               *tile_max_cols;
+    ngx_http_complex_value_t               *tile_rows;
+    ngx_http_complex_value_t               *tile_max_rows;
+    ngx_http_complex_value_t               *tile_margin;
+    ngx_http_complex_value_t               *tile_padding;
     ngx_str_t                               tile_color;
 
     ngx_uint_t                              jpeg_baseline;
@@ -75,9 +75,14 @@ typedef struct {
     ngx_int_t                                   second;
     ngx_int_t                                   width;
     ngx_int_t                                   height;
-    ngx_uint_t                                  tile_sample_interval;
-    ngx_uint_t                                  tile_cols;
-    ngx_uint_t                                  tile_rows;
+    ngx_int_t                                   tile_sample_interval;
+    ngx_int_t                                   tile_cols;
+    ngx_int_t                                   tile_max_cols;
+    ngx_int_t                                   tile_rows;
+    ngx_int_t                                   tile_max_rows;
+    ngx_int_t                                   tile_margin;
+    ngx_int_t                                   tile_padding;
+    ngx_str_t                                   tile_color;
     ngx_str_t                                   filename;
 } ngx_http_video_thumbextractor_thumb_ctx_t;
 
@@ -112,6 +117,15 @@ ngx_int_t ngx_http_video_thumbextractor_filter_init(ngx_conf_t *cf);
 
 
 static ngx_str_t NGX_HTTP_VIDEO_THUMBEXTRACTOR_CONTENT_TYPE = ngx_string("image/jpeg");
+
+#define NGX_HTTP_VIDEO_THUMBEXTRACTOR_PARSE_VARIABLE_VALUE_INT(conf_complex, variable, integer, default_value)  \
+    if (conf_complex != NULL) {                                                                                 \
+        ngx_http_complex_value(r, conf_complex, &variable);                                                     \
+        integer = ngx_atoi(variable.data, variable.len);                                                        \
+        integer = (integer != NGX_ERROR) ? integer : default_value;                                             \
+    } else {                                                                                                    \
+        integer = default_value;                                                                                \
+    }
 
 #define NGX_HTTP_VIDEO_THUMBEXTRACTOR_VARIABLE_REQUIRED(variable, log, msg)          \
     if (variable.len == 0) {                                                         \

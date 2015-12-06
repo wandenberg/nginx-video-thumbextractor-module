@@ -41,6 +41,11 @@ static char *ngx_http_video_thumbextractor(ngx_conf_t *cf, ngx_command_t *cmd, v
 
 ngx_flag_t ngx_http_video_thumbextractor_used = 0;
 
+#define ngx_conf_merge_null_value(conf, prev, default)             \
+    if (conf == NULL) {                                            \
+        conf = (prev == NULL) ? default : prev;                    \
+    }
+
 static ngx_command_t  ngx_http_video_thumbextractor_commands[] = {
     { ngx_string("video_thumbextractor"),
       NGX_HTTP_LOC_CONF|NGX_CONF_NOARGS,
@@ -86,43 +91,43 @@ static ngx_command_t  ngx_http_video_thumbextractor_commands[] = {
       NULL },
     { ngx_string("video_thumbextractor_tile_rows"),
       NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_num_slot,
+      ngx_http_set_complex_value_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_rows),
       NULL },
     { ngx_string("video_thumbextractor_tile_max_rows"),
       NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_num_slot,
+      ngx_http_set_complex_value_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_max_rows),
       NULL },
     { ngx_string("video_thumbextractor_tile_cols"),
       NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_num_slot,
+      ngx_http_set_complex_value_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_cols),
       NULL },
     { ngx_string("video_thumbextractor_tile_max_cols"),
       NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_num_slot,
+      ngx_http_set_complex_value_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_max_cols),
       NULL },
     { ngx_string("video_thumbextractor_tile_sample_interval"),
       NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_num_slot,
+      ngx_http_set_complex_value_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_sample_interval),
       NULL },
     { ngx_string("video_thumbextractor_tile_margin"),
       NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_num_slot,
+      ngx_http_set_complex_value_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_margin),
       NULL },
     { ngx_string("video_thumbextractor_tile_padding"),
       NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_num_slot,
+      ngx_http_set_complex_value_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_padding),
       NULL },
@@ -261,13 +266,13 @@ ngx_http_video_thumbextractor_create_loc_conf(ngx_conf_t *cf)
     conf->video_second = NULL;
     conf->image_width = NULL;
     conf->image_height = NULL;
-    conf->tile_sample_interval = NGX_CONF_UNSET_UINT;
-    conf->tile_cols = NGX_CONF_UNSET_UINT;
-    conf->tile_max_cols = NGX_CONF_UNSET_UINT;
-    conf->tile_rows = NGX_CONF_UNSET_UINT;
-    conf->tile_max_rows = NGX_CONF_UNSET_UINT;
-    conf->tile_margin = NGX_CONF_UNSET_UINT;
-    conf->tile_padding = NGX_CONF_UNSET_UINT;
+    conf->tile_sample_interval = NULL;
+    conf->tile_cols = NULL;
+    conf->tile_max_cols = NULL;
+    conf->tile_rows = NULL;
+    conf->tile_max_rows = NULL;
+    conf->tile_margin = NULL;
+    conf->tile_padding = NULL;
     ngx_str_null(&conf->tile_color);
     conf->jpeg_baseline = NGX_CONF_UNSET_UINT;
     conf->jpeg_progressive_mode = NGX_CONF_UNSET_UINT;
@@ -291,29 +296,17 @@ ngx_http_video_thumbextractor_merge_loc_conf(ngx_conf_t *cf, void *parent, void 
 
     ngx_conf_merge_value(conf->enabled, prev->enabled, 0);
 
-    if (conf->video_filename == NULL) {
-        conf->video_filename = prev->video_filename;
-    }
-
-    if (conf->video_second == NULL) {
-        conf->video_second = prev->video_second;
-    }
-
-    if (conf->image_width == NULL) {
-        conf->image_width = prev->image_width;
-    }
-
-    if (conf->image_height == NULL) {
-        conf->image_height = prev->image_height;
-    }
-
-    ngx_conf_merge_uint_value(conf->tile_sample_interval, prev->tile_sample_interval, NGX_CONF_UNSET_UINT);
-    ngx_conf_merge_uint_value(conf->tile_cols, prev->tile_cols, NGX_CONF_UNSET_UINT);
-    ngx_conf_merge_uint_value(conf->tile_max_cols, prev->tile_max_cols, NGX_CONF_UNSET_UINT);
-    ngx_conf_merge_uint_value(conf->tile_rows, prev->tile_rows, NGX_CONF_UNSET_UINT);
-    ngx_conf_merge_uint_value(conf->tile_max_rows, prev->tile_max_rows, NGX_CONF_UNSET_UINT);
-    ngx_conf_merge_uint_value(conf->tile_margin, prev->tile_margin, 0);
-    ngx_conf_merge_uint_value(conf->tile_padding, prev->tile_padding, 0);
+    ngx_conf_merge_null_value(conf->video_filename, prev->video_filename, NULL);
+    ngx_conf_merge_null_value(conf->video_second, prev->video_second, NULL);
+    ngx_conf_merge_null_value(conf->image_width, prev->image_width, NULL);
+    ngx_conf_merge_null_value(conf->image_height, prev->image_height, NULL);
+    ngx_conf_merge_null_value(conf->tile_sample_interval, prev->tile_sample_interval, NULL);
+    ngx_conf_merge_null_value(conf->tile_cols, prev->tile_cols, NULL);
+    ngx_conf_merge_null_value(conf->tile_max_cols, prev->tile_max_cols, NULL);
+    ngx_conf_merge_null_value(conf->tile_rows, prev->tile_rows, NULL);
+    ngx_conf_merge_null_value(conf->tile_max_rows, prev->tile_max_rows, NULL);
+    ngx_conf_merge_null_value(conf->tile_margin, prev->tile_margin, NULL);
+    ngx_conf_merge_null_value(conf->tile_padding, prev->tile_padding, NULL);
     ngx_conf_merge_str_value(conf->tile_color, prev->tile_color, "black");
 
     ngx_conf_merge_uint_value(conf->jpeg_baseline, prev->jpeg_baseline, 1);

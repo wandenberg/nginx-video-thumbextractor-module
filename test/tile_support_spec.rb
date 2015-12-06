@@ -10,12 +10,22 @@ describe "when composing a panel with multiple frames" do
         content = image('/test_video.mp4?second=2&height=64', {}, "200")
         expect(content).to be_perceptual_equal_to('test_video_2_cols.jpg')
       end
+
+      nginx_run_server(tile_cols: "$arg_cols", only_keyframe: 'off') do
+        content = image('/test_video.mp4?second=2&height=64&cols=2', {}, "200")
+        expect(content).to be_perceptual_equal_to('test_video_2_cols.jpg')
+      end
     end
 
     context "and a sample interval value" do
       it "should use as many rows as needed to show the video frames at each 2 seconds" do
         nginx_run_server(tile_cols: 2, tile_sample_interval: 2, only_keyframe: 'off') do
           content = image('/test_video.mp4?second=2&height=64', {}, "200")
+          expect(content).to be_perceptual_equal_to('test_video_2_cols_2s_interval.jpg')
+        end
+
+        nginx_run_server(tile_cols: 2, tile_sample_interval: '$arg_interval', only_keyframe: 'off') do
+          content = image('/test_video.mp4?second=2&height=64&interval=2', {}, "200")
           expect(content).to be_perceptual_equal_to('test_video_2_cols_2s_interval.jpg')
         end
       end
@@ -27,6 +37,11 @@ describe "when composing a panel with multiple frames" do
           content = image('/test_video.mp4?second=2&height=64', {}, "200")
           expect(content).to be_perceptual_equal_to('test_video_2_cols_2s_interval_2_max_rows.jpg')
         end
+
+        nginx_run_server(tile_cols: 2, tile_sample_interval: 2, tile_max_rows: '$arg_max_rows', only_keyframe: 'off') do
+          content = image('/test_video.mp4?second=2&height=64&max_rows=2', {}, "200")
+          expect(content).to be_perceptual_equal_to('test_video_2_cols_2s_interval_2_max_rows.jpg')
+        end
       end
     end
   end
@@ -35,6 +50,11 @@ describe "when composing a panel with multiple frames" do
     it "should use as many cols as needed to show the video frames at each 5 seconds" do
       nginx_run_server(tile_rows: 1, only_keyframe: 'off') do
         content = image('/test_video.mp4?second=2&height=64', {}, "200")
+        expect(content).to be_perceptual_equal_to('test_video_1_rows.jpg')
+      end
+
+      nginx_run_server(tile_rows: '$arg_rows', only_keyframe: 'off') do
+        content = image('/test_video.mp4?second=2&height=64&rows=1', {}, "200")
         expect(content).to be_perceptual_equal_to('test_video_1_rows.jpg')
       end
     end
@@ -52,6 +72,11 @@ describe "when composing a panel with multiple frames" do
       it "should use at most the given number of cols" do
         nginx_run_server(tile_rows: 1, tile_sample_interval: 2, tile_max_cols: 5, only_keyframe: 'off') do
           content = image('/test_video.mp4?second=2&height=64', {}, "200")
+          expect(content).to be_perceptual_equal_to('test_video_1_rows_2s_interval_5_max_cols.jpg')
+        end
+
+        nginx_run_server(tile_rows: 1, tile_sample_interval: 2, tile_max_cols: '$arg_max_cols', only_keyframe: 'off') do
+          content = image('/test_video.mp4?second=2&height=64&max_cols=5', {}, "200")
           expect(content).to be_perceptual_equal_to('test_video_1_rows_2s_interval_5_max_cols.jpg')
         end
       end
@@ -91,6 +116,11 @@ describe "when composing a panel with multiple frames" do
         content = image('/test_video.mp4?second=2&height=64', {}, "200")
         expect(content).to be_perceptual_equal_to('test_video_2_cols_2_rows_5_margin.jpg')
       end
+
+      nginx_run_server(tile_cols: 2, tile_rows: 2, tile_margin: '$arg_margin', tile_color: '#EEAA33', only_keyframe: 'off') do
+        content = image('/test_video.mp4?second=2&height=64&margin=5', {}, "200")
+        expect(content).to be_perceptual_equal_to('test_video_2_cols_2_rows_5_margin.jpg')
+      end
     end
   end
 
@@ -98,6 +128,11 @@ describe "when composing a panel with multiple frames" do
     it "should apply the given padding to the frames" do
       nginx_run_server(tile_cols: 2, tile_rows: 2, tile_padding: 3, tile_color: '#EEAA33', only_keyframe: 'off') do
         content = image('/test_video.mp4?second=2&height=64', {}, "200")
+        expect(content).to be_perceptual_equal_to('test_video_2_cols_2_rows_3_padding.jpg')
+      end
+
+      nginx_run_server(tile_cols: 2, tile_rows: 2, tile_padding: '$arg_padding', tile_color: '#EEAA33', only_keyframe: 'off') do
+        content = image('/test_video.mp4?second=2&height=64&padding=3', {}, "200")
         expect(content).to be_perceptual_equal_to('test_video_2_cols_2_rows_3_padding.jpg')
       end
     end

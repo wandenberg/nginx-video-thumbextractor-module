@@ -151,7 +151,7 @@ ngx_http_video_thumbextractor_set_request_context(ngx_http_request_t *r)
     ngx_pool_cleanup_t                          *cln;
     ngx_http_core_loc_conf_t                    *clcf;
     ngx_str_t                                    vv_filename = ngx_null_string, vv_second = ngx_null_string;
-    ngx_str_t                                    vv_width = ngx_null_string, vv_height = ngx_null_string;
+    ngx_str_t                                    vv_value = ngx_null_string;
 
     vtlcf = ngx_http_get_module_loc_conf(r, ngx_http_video_thumbextractor_module);
     clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
@@ -197,17 +197,16 @@ ngx_http_video_thumbextractor_set_request_context(ngx_http_request_t *r)
         return NGX_HTTP_BAD_REQUEST;
     }
 
-    if (vtlcf->image_width != NULL) {
-        ngx_http_complex_value(r, vtlcf->image_width, &vv_width);
-        thumb_ctx->width = ngx_atoi(vv_width.data, vv_width.len);
-        thumb_ctx->width = (thumb_ctx->width != NGX_ERROR) ? thumb_ctx->width : 0;
-    }
-
-    if (vtlcf->image_height != NULL) {
-        ngx_http_complex_value(r, vtlcf->image_height, &vv_height);
-        thumb_ctx->height = ngx_atoi(vv_height.data, vv_height.len);
-        thumb_ctx->height = (thumb_ctx->height != NGX_ERROR) ? thumb_ctx->height : 0;
-    }
+    NGX_HTTP_VIDEO_THUMBEXTRACTOR_PARSE_VARIABLE_VALUE_INT(vtlcf->image_width, vv_value, thumb_ctx->width, 0);
+    NGX_HTTP_VIDEO_THUMBEXTRACTOR_PARSE_VARIABLE_VALUE_INT(vtlcf->image_height, vv_value, thumb_ctx->height, 0);
+    NGX_HTTP_VIDEO_THUMBEXTRACTOR_PARSE_VARIABLE_VALUE_INT(vtlcf->tile_sample_interval, vv_value, thumb_ctx->tile_sample_interval, 5);
+    NGX_HTTP_VIDEO_THUMBEXTRACTOR_PARSE_VARIABLE_VALUE_INT(vtlcf->tile_rows, vv_value, thumb_ctx->tile_rows, NGX_CONF_UNSET);
+    NGX_HTTP_VIDEO_THUMBEXTRACTOR_PARSE_VARIABLE_VALUE_INT(vtlcf->tile_max_rows, vv_value, thumb_ctx->tile_max_rows, NGX_CONF_UNSET);
+    NGX_HTTP_VIDEO_THUMBEXTRACTOR_PARSE_VARIABLE_VALUE_INT(vtlcf->tile_cols, vv_value, thumb_ctx->tile_cols, NGX_CONF_UNSET);
+    NGX_HTTP_VIDEO_THUMBEXTRACTOR_PARSE_VARIABLE_VALUE_INT(vtlcf->tile_max_cols, vv_value, thumb_ctx->tile_max_cols, NGX_CONF_UNSET);
+    NGX_HTTP_VIDEO_THUMBEXTRACTOR_PARSE_VARIABLE_VALUE_INT(vtlcf->tile_margin, vv_value, thumb_ctx->tile_margin, 0);
+    NGX_HTTP_VIDEO_THUMBEXTRACTOR_PARSE_VARIABLE_VALUE_INT(vtlcf->tile_padding, vv_value, thumb_ctx->tile_padding, 0);
+    thumb_ctx->tile_color = vtlcf->tile_color;
 
     if (((thumb_ctx->width > 0) && (thumb_ctx->width < 16)) || ((thumb_ctx->height > 0) && (thumb_ctx->height < 16))) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "video thumb extractor module: Very small size requested, %d x %d", thumb_ctx->width, thumb_ctx->height);
