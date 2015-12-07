@@ -47,7 +47,7 @@ ngx_http_video_thumbextractor_module_ensure_extractor_process(void)
     ngx_int_t                                    slot = -1;
     ngx_uint_t                                   i;
 
-    if (ngx_queue_empty(ngx_http_video_thumbextractor_module_extract_queue)) {
+    if (ngx_queue_empty(ngx_http_video_thumbextractor_module_extract_queue) || ngx_exiting) {
         return;
     }
 
