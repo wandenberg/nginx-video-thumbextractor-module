@@ -90,17 +90,21 @@ typedef enum {
     NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_RC = 1,
     NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_LEN,
     NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_DATA,
+    NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_CONTEXT,
+    NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_FILENAME,
+    NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_CONFIG,
     NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_FINISHED
 } ngx_http_video_thumbextractor_transfer_step;
 
 typedef struct {
     ngx_http_video_thumbextractor_transfer_step     step;
     ngx_buf_t                                       buffer;
-    ngx_http_video_thumbextractor_thumb_ctx_t       thumb_ctx;
     caddr_t                                         data;
     size_t                                          size;
     ngx_int_t                                       rc;
     ngx_pool_t                                     *pool;
+    ngx_http_video_thumbextractor_loc_conf_t       *vtlcf;
+    ngx_http_video_thumbextractor_thumb_ctx_t      *thumb_ctx;
     ngx_connection_t                               *conn;
 } ngx_http_video_thumbextractor_transfer_t;
 

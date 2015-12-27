@@ -365,11 +365,11 @@ ngx_http_video_thumbextractor_post_config(ngx_conf_t *cf)
 static ngx_int_t
 ngx_http_video_thumbextractor_init_worker(ngx_cycle_t *cycle)
 {
-    ngx_uint_t i;
+    ngx_http_video_thumbextractor_main_conf_t *vtmcf = ngx_http_cycle_get_module_main_conf(cycle, ngx_http_video_thumbextractor_module);
+    ngx_uint_t                                 i;
 
-    for (i = 0; i < NGX_MAX_PROCESSES; ++i) {
-        ngx_http_video_thumbextractor_module_ipc_ctxs[i].pid = -1;
-        ngx_http_video_thumbextractor_module_ipc_ctxs[i].slot = i;
+    if ((ngx_process != NGX_PROCESS_SINGLE) && (ngx_process != NGX_PROCESS_WORKER)) {
+        return NGX_OK;
     }
 
     if ((ngx_http_video_thumbextractor_module_extract_queue = ngx_pcalloc(ngx_cycle->pool, sizeof(ngx_queue_t))) == NULL) {
@@ -380,6 +380,11 @@ ngx_http_video_thumbextractor_init_worker(ngx_cycle_t *cycle)
     ngx_queue_init(ngx_http_video_thumbextractor_module_extract_queue);
 
     ngx_http_video_thumbextractor_init_libraries();
+
+    for (i = 0; i < vtmcf->processes_per_worker; i++) {
+        ngx_http_video_thumbextractor_fork_extract_process(i);
+    }
+
     return NGX_OK;
 }
 
@@ -387,17 +392,21 @@ ngx_http_video_thumbextractor_init_worker(ngx_cycle_t *cycle)
 static void
 ngx_http_video_thumbextractor_exit_worker(ngx_cycle_t *cycle)
 {
+    ngx_http_video_thumbextractor_main_conf_t *vtmcf = ngx_http_cycle_get_module_main_conf(cycle, ngx_http_video_thumbextractor_module);
     ngx_uint_t                                 i;
 
-    for (i = 0; i < NGX_MAX_PROCESSES; i++) {
+    if ((ngx_process != NGX_PROCESS_SINGLE) && (ngx_process != NGX_PROCESS_WORKER)) {
+        return;
+    }
+
+    for (i = 0; i < vtmcf->processes_per_worker; i++) {
         if (ngx_http_video_thumbextractor_module_ipc_ctxs[i].pid != -1) {
-            ngx_close_socket(ngx_http_video_thumbextractor_module_ipc_ctxs[i].pipefd[0]);
-            ngx_close_socket(ngx_http_video_thumbextractor_module_ipc_ctxs[i].pipefd[1]);
+            ngx_close_socket(ngx_http_video_thumbextractor_module_ipc_ctxs[i].sockets[0]);
+            ngx_close_socket(ngx_http_video_thumbextractor_module_ipc_ctxs[i].sockets[1]);
             kill(ngx_http_video_thumbextractor_module_ipc_ctxs[i].pid, SIGTERM);
         }
     }
 }
-
 
 
 static char *

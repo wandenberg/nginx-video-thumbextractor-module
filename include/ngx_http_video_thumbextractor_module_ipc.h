@@ -29,12 +29,12 @@
 #include <ngx_http_video_thumbextractor_module.h>
 
 typedef struct {
-    ngx_socket_t                                    pipefd[2];
-    ngx_connection_t                               *conn;
+    ngx_socket_t                                    sockets[2];
     ngx_pid_t                                       pid;
     ngx_flag_t                                      processing;
     ngx_http_request_t                             *request;
     ngx_int_t                                       slot;
+    ngx_http_video_thumbextractor_transfer_t        transfer;
 } ngx_http_video_thumbextractor_ipc_t;
 
 
@@ -43,5 +43,7 @@ ngx_queue_t    *ngx_http_video_thumbextractor_module_extract_queue;
 ngx_http_video_thumbextractor_ipc_t    ngx_http_video_thumbextractor_module_ipc_ctxs[NGX_MAX_PROCESSES];
 
 void            ngx_http_video_thumbextractor_module_ensure_extractor_process(void);
+
+static ngx_int_t ngx_http_video_thumbextractor_fork_extract_process(ngx_uint_t slot);
 
 #endif /* NGX_HTTP_VIDEO_THUMBEXTRACTOR_MODULE_IPC_H_ */

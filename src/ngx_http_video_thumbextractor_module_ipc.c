@@ -24,21 +24,25 @@
  *
  */
 
+#include <ngx_channel.h>
 ngx_http_output_header_filter_pt ngx_http_video_thumbextractor_next_header_filter;
 ngx_http_output_body_filter_pt ngx_http_video_thumbextractor_next_body_filter;
 
-void        ngx_http_video_thumbextractor_fork_extract_process(ngx_uint_t slot);
-void        ngx_http_video_thumbextractor_run_extract(ngx_http_video_thumbextractor_ipc_t *ipc_ctx);
-void        ngx_http_video_thumbextractor_extract_process_read_handler(ngx_event_t *ev);
+void        ngx_http_video_thumbextractor_start_extract(ngx_uint_t slot);
+void        ngx_http_video_thumbextractor_send_values_to_process(ngx_event_t *ev);
+void        ngx_http_video_thumbextractor_run_extract(ngx_int_t fd);
+void        ngx_http_video_thumbextractor_extract_process_parent_read_handler(ngx_event_t *ev);
+void        ngx_http_video_thumbextractor_extract_process_child_read_handler(ngx_event_t *ev);
 void        ngx_http_video_thumbextractor_extract_process_write_handler(ngx_event_t *ev);
+void        ngx_http_video_thumbextractor_cleanup_parent_process(ngx_http_video_thumbextractor_ipc_t *ipc_ctx);
 void        ngx_http_video_thumbextractor_cleanup_extract_process(ngx_http_video_thumbextractor_transfer_t *transfer);
-void        ngx_http_video_thumbextractor_release_slot(ngx_int_t slot);
 ngx_int_t   ngx_http_video_thumbextractor_recv(ngx_connection_t *c, ngx_event_t *rev, ngx_buf_t *buf, ssize_t len);
 ngx_int_t   ngx_http_video_thumbextractor_write(ngx_connection_t *c, ngx_event_t *wev, ngx_buf_t *buf, ssize_t len);
 void        ngx_http_video_thumbextractor_set_buffer(ngx_buf_t *buf, u_char *start, u_char *last, ssize_t len);
 void        ngx_http_video_thumbextractor_sig_handler(int signo);
 
-static ngx_http_video_thumbextractor_transfer_t *ngx_http_video_thumbextractor_transfer = NULL;
+static ngx_http_video_thumbextractor_transfer_t ngx_http_video_thumbextractor_transfer;
+static ngx_socket_t                             ngx_http_video_thumbextractor_transfer_sockets[2];
 
 void
 ngx_http_video_thumbextractor_module_ensure_extractor_process(void)
@@ -52,60 +56,60 @@ ngx_http_video_thumbextractor_module_ensure_extractor_process(void)
     }
 
     for (i = 0; i < vtmcf->processes_per_worker; ++i) {
-        if (ngx_http_video_thumbextractor_module_ipc_ctxs[i].pid == -1) {
+        if ((ngx_http_video_thumbextractor_module_ipc_ctxs[i].pid != -1) && (!ngx_http_video_thumbextractor_module_ipc_ctxs[i].processing)) {
+            ngx_http_video_thumbextractor_module_ipc_ctxs[i].processing = 1;
             slot = i;
             break;
         }
     }
 
     if (slot >= 0) {
-        ngx_http_video_thumbextractor_fork_extract_process(slot);
+        ngx_http_video_thumbextractor_start_extract(slot);
     }
 }
 
 
-void
+static ngx_int_t
 ngx_http_video_thumbextractor_fork_extract_process(ngx_uint_t slot)
 {
     ngx_http_video_thumbextractor_ipc_t      *ipc_ctx = &ngx_http_video_thumbextractor_module_ipc_ctxs[slot];
-    ngx_http_video_thumbextractor_transfer_t *transfer;
-    ngx_http_video_thumbextractor_ctx_t      *ctx;
-    ngx_queue_t                              *q;
-    int                                       ret;
-    ngx_pid_t                                 pid;
+    ngx_socket_t                             *socks = ipc_ctx->sockets;
     ngx_event_t                              *rev;
+    ngx_pid_t                                 pid;
 
-    q = ngx_queue_head(ngx_http_video_thumbextractor_module_extract_queue);
-    ngx_queue_remove(q);
-    ngx_queue_init(q);
-    ctx = ngx_queue_data(q, ngx_http_video_thumbextractor_ctx_t, queue);
-
-    ipc_ctx->pipefd[0] = -1;
-    ipc_ctx->pipefd[1] = -1;
-    ipc_ctx->request = ctx->request;
-    ctx->slot = slot;
-    transfer = &ctx->transfer;
-
-    if (pipe(ipc_ctx->pipefd) == -1) {
-        ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: unable to initialize a pipe");
-        return;
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, socks) == -1) {
+        ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, "socketpair() failed on socketpair while initializing video thumb extractor module");
+        return NGX_ERROR;
     }
 
-    /* make pipe write end survive through exec */
-
-    ret = fcntl(ipc_ctx->pipefd[1], F_GETFD);
-
-    if (ret != -1) {
-        ret &= ~FD_CLOEXEC;
-        ret = fcntl(ipc_ctx->pipefd[1], F_SETFD, ret);
+    if (ngx_nonblocking(socks[0]) == -1) {
+        ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, ngx_nonblocking_n " failed on socketpair while initializing video thumb extractor module");
+        ngx_close_channel(socks, ngx_cycle->log);
+        return NGX_ERROR;
     }
 
-    if (ret == -1) {
-        close(ipc_ctx->pipefd[0]);
-        close(ipc_ctx->pipefd[1]);
+    if (ngx_nonblocking(socks[1]) == -1) {
+        ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, ngx_nonblocking_n " failed on socketpair while initializing video thumb extractor module");
+        ngx_close_channel(socks, ngx_cycle->log);
+        return NGX_ERROR;
+    }
 
-        ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: unable to make pipe write end live longer");
-        return;
+    if (fcntl(socks[0], F_SETOWN, ngx_pid) == -1) {
+        ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, "fcntl(F_SETOWN) failed on socketpair while initializing video thumb extractor module");
+        ngx_close_channel(socks, ngx_cycle->log);
+        return NGX_ERROR;
+    }
+
+    if (fcntl(socks[0], F_SETFD, FD_CLOEXEC) == -1) {
+        ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, "fcntl(FD_CLOEXEC) failed on socketpair while initializing video thumb extractor module");
+        ngx_close_channel(socks, ngx_cycle->log);
+        return NGX_ERROR;
+    }
+
+    if (fcntl(socks[1], F_SETFD, FD_CLOEXEC) == -1) {
+        ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, "fcntl(FD_CLOEXEC) failed while initializing video thumb extractor module");
+        ngx_close_channel(socks, ngx_cycle->log);
+        return NGX_ERROR;
     }
 
     /* ignore the signal when the child dies */
@@ -117,16 +121,8 @@ ngx_http_video_thumbextractor_fork_extract_process(ngx_uint_t slot)
 
     case -1:
         /* failure */
-        if (ipc_ctx->pipefd[0] != -1) {
-            close(ipc_ctx->pipefd[0]);
-        }
-
-        if (ipc_ctx->pipefd[1] != -1) {
-            close(ipc_ctx->pipefd[1]);
-        }
-
+        ngx_close_channel(socks, ngx_cycle->log);
         ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: unable to fork the process");
-
         break;
 
     case 0:
@@ -135,51 +131,151 @@ ngx_http_video_thumbextractor_fork_extract_process(ngx_uint_t slot)
 #if (NGX_LINUX)
         prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0);
 #endif
-        if (ipc_ctx->pipefd[0] != -1) {
-            close(ipc_ctx->pipefd[0]);
-        }
 
+        ngx_http_video_thumbextractor_transfer_sockets[0] = socks[0];
+        ngx_http_video_thumbextractor_transfer_sockets[1] = socks[1];
         ngx_pid = ngx_getpid();
         ngx_setproctitle("thumb extractor");
-        ngx_http_video_thumbextractor_run_extract(ipc_ctx);
+        ngx_http_video_thumbextractor_run_extract(socks[1]);
+
         break;
 
     default:
         /* parent */
-        if (ipc_ctx->pipefd[1] != -1) {
-            close(ipc_ctx->pipefd[1]);
-        }
+        ipc_ctx->pid = pid;
+        ipc_ctx->transfer.conn = ngx_get_connection(socks[0], ngx_cycle->log);
+        ipc_ctx->transfer.conn->data = ipc_ctx;
 
-        if (ipc_ctx->pipefd[0] != -1) {
-            ipc_ctx->pid = pid;
-            ipc_ctx->conn = ngx_get_connection(ipc_ctx->pipefd[0], ngx_cycle->log);
-            ipc_ctx->conn->data = ipc_ctx;
+        rev = ipc_ctx->transfer.conn->read;
+        rev->handler = ngx_http_video_thumbextractor_extract_process_parent_read_handler;
 
-            transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_RC;
-            ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) &transfer->rc, NULL, sizeof(ngx_int_t));
-
-            rev = ipc_ctx->conn->read;
-            rev->handler = ngx_http_video_thumbextractor_extract_process_read_handler;
-
-            if (ngx_add_event(rev, NGX_READ_EVENT, 0) != NGX_OK) {
-                ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: failed to add child control event");
-            }
+        if (ngx_add_event(rev, NGX_READ_EVENT, 0) != NGX_OK) {
+            ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: failed to add child control event");
         }
         break;
+    }
+
+    return NGX_OK;
+}
+
+
+void
+ngx_http_video_thumbextractor_start_extract(ngx_uint_t slot)
+{
+    ngx_http_video_thumbextractor_ipc_t       *ipc_ctx = &ngx_http_video_thumbextractor_module_ipc_ctxs[slot];
+    ngx_http_video_thumbextractor_transfer_t  *transfer = &ipc_ctx ->transfer;
+    ngx_event_t                               *wev;
+    ngx_queue_t                               *q;
+    ngx_http_video_thumbextractor_ctx_t       *ctx;
+    ngx_connection_t                          *c;
+
+    q = ngx_queue_head(ngx_http_video_thumbextractor_module_extract_queue);
+    ngx_queue_remove(q);
+    ngx_queue_init(q);
+    ctx = ngx_queue_data(q, ngx_http_video_thumbextractor_ctx_t, queue);
+
+    ctx->slot = slot;
+    ipc_ctx->request = ctx->request;
+
+    c = transfer->conn;
+    ngx_memzero(transfer, sizeof(ngx_http_video_thumbextractor_transfer_t));
+    transfer->conn = c;
+    transfer->thumb_ctx = &ctx->thumb_ctx;
+    transfer->vtlcf = ngx_http_get_module_loc_conf(ctx->request, ngx_http_video_thumbextractor_module);
+
+    transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_CONTEXT;
+    ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) transfer->thumb_ctx, NULL, sizeof(ngx_http_video_thumbextractor_thumb_ctx_t));
+
+    wev = ipc_ctx->transfer.conn->write;
+    wev->handler = ngx_http_video_thumbextractor_send_values_to_process;
+
+    if (ngx_add_event(wev, NGX_WRITE_EVENT, 0) != NGX_OK) {
+        ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: failed to add parent write event");
+    }
+
+    ngx_http_video_thumbextractor_send_values_to_process(wev);
+}
+
+
+void
+ngx_http_video_thumbextractor_send_values_to_process(ngx_event_t *ev)
+{
+    ngx_http_video_thumbextractor_ipc_t       *ipc_ctx;
+    ngx_http_video_thumbextractor_transfer_t  *transfer;
+    ngx_http_video_thumbextractor_thumb_ctx_t *thumb_ctx;
+    ngx_connection_t                          *c;
+    ngx_http_request_t                        *r;
+    ngx_int_t                                  rc;
+
+    c = ev->data;
+    ipc_ctx = c->data;
+    transfer = &ipc_ctx->transfer;
+    thumb_ctx = transfer->thumb_ctx;
+
+    r = ipc_ctx->request;
+
+    if (r == NULL) {
+        ngx_log_debug(NGX_LOG_DEBUG, ngx_cycle->log, 0, "video thumb extractor module: request already gone");
+        goto request_gone;
+    }
+
+    ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, transfer->buffer.start, transfer->buffer.last, 0);
+
+    if ((rc = ngx_http_video_thumbextractor_write(c, ev, &transfer->buffer, transfer->buffer.end - transfer->buffer.start)) != NGX_OK) {
+        goto transfer_failed;
+    }
+
+    switch (transfer->step) {
+    case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_CONTEXT:
+        ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, thumb_ctx->filename.data, NULL, thumb_ctx->filename.len);
+        transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_FILENAME;
+        break;
+
+    case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_FILENAME:
+        ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) &transfer->vtlcf, NULL, sizeof(ngx_http_video_thumbextractor_loc_conf_t *));
+        transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_CONFIG;
+        break;
+
+    case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_CONFIG:
+        ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) &transfer->rc, NULL, sizeof(ngx_int_t));
+        transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_RC;
+        goto exit;
+        break;
+
+    default:
+        break;
+    }
+
+    return;
+
+transfer_failed:
+
+    if (rc == NGX_AGAIN) {
+        return;
+    }
+
+    if (rc == NGX_ERROR) {
+        ngx_log_error(NGX_LOG_CRIT, r->connection->log, 0, "video thumb extractor module: error sending data to extract thumbor process");
+        ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        ngx_http_finalize_request(r, NGX_OK);
+    }
+
+request_gone:
+
+    ngx_http_video_thumbextractor_cleanup_parent_process(ipc_ctx);
+
+exit:
+
+    if (ngx_del_event(ev, NGX_WRITE_EVENT, 0) != NGX_OK) {
+        ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: failed to remove parent write event");
     }
 }
 
 
 void
-ngx_http_video_thumbextractor_run_extract(ngx_http_video_thumbextractor_ipc_t *ipc_ctx)
+ngx_http_video_thumbextractor_run_extract(ngx_int_t fd)
 {
-    ngx_http_video_thumbextractor_loc_conf_t  *vtlcf;
-    ngx_http_video_thumbextractor_transfer_t  *transfer;
-    ngx_http_video_thumbextractor_ctx_t       *ctx;
-    ngx_http_request_t                        *r;
-    ngx_pool_t                                *temp_pool;
-    ngx_event_t                               *wev;
-    ngx_int_t                                  rc = NGX_ERROR;
+    ngx_event_t                               *rev;
     ngx_log_t                                 *log;
     ngx_cycle_t                               *cycle;
     ngx_pool_t                                *pool;
@@ -189,6 +285,14 @@ ngx_http_video_thumbextractor_run_extract(ngx_http_video_thumbextractor_ipc_t *i
 
     if (signal(SIGTERM, ngx_http_video_thumbextractor_sig_handler) == SIG_ERR) {
         ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: could not set the catch signal for SIGTERM");
+    }
+
+    if (signal(SIGINT, ngx_http_video_thumbextractor_sig_handler) == SIG_ERR) {
+        ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: could not set the catch signal for SIGINT");
+    }
+
+    if (signal(SIGUSR1, ngx_http_video_thumbextractor_sig_handler) == SIG_ERR) {
+        ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: could not set the catch signal for SIGUSR1");
     }
 
     log = ngx_cycle->log;
@@ -231,63 +335,29 @@ ngx_http_video_thumbextractor_run_extract(ngx_http_video_thumbextractor_ipc_t *i
 
     ngx_cycle = cycle;
 
-    if ((temp_pool = ngx_create_pool(4096, ngx_cycle->log)) == NULL) {
-        ngx_log_error(NGX_LOG_CRIT, ngx_cycle->log, 0, "video thumb extractor module: unable to allocate temporary pool to extract the thumb");
-        if (ngx_write_fd(ipc_ctx->pipefd[1], &rc, sizeof(ngx_int_t)) <= 0) {
-            exit(1);
-        }
+    ngx_http_video_thumbextractor_transfer.pool = NULL;
+    ngx_http_video_thumbextractor_transfer.conn = ngx_get_connection(fd, ngx_cycle->log);
+
+    rev = ngx_http_video_thumbextractor_transfer.conn->read;
+    rev->handler = ngx_http_video_thumbextractor_extract_process_child_read_handler;
+
+    if (ngx_add_event(rev, NGX_READ_EVENT, 0) != NGX_OK) {
+        ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: failed to add child read event");
     }
-
-    if ((transfer = ngx_pcalloc(temp_pool, sizeof(ngx_http_video_thumbextractor_transfer_t))) == NULL) {
-        ngx_destroy_pool(temp_pool);
-        ngx_log_error(NGX_LOG_CRIT, ngx_cycle->log, 0, "video thumb extractor module: unable to allocate transfer structure");
-        if (ngx_write_fd(ipc_ctx->pipefd[1], &rc, sizeof(ngx_int_t)) <= 0) {
-            exit(1);
-        }
-    }
-    transfer->pool = temp_pool;
-    ngx_http_video_thumbextractor_transfer = transfer;
-
-    r = ipc_ctx->request;
-    if (r == NULL) {
-        if (ngx_write_fd(ipc_ctx->pipefd[1], &rc, sizeof(ngx_int_t)) <= 0) {
-            exit(1);
-        }
-    }
-
-    vtlcf = ngx_http_get_module_loc_conf(r, ngx_http_video_thumbextractor_module);
-    ctx = ngx_http_get_module_ctx(r, ngx_http_video_thumbextractor_module);
-
-    transfer->data = 0;
-    transfer->size = 0;
-
-    transfer->rc = ngx_http_video_thumbextractor_get_thumb(vtlcf, &ctx->thumb_ctx, &transfer->data, &transfer->size, temp_pool, r->connection->log);
-
-    transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_RC;
-    ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) &transfer->rc, NULL, sizeof(ngx_int_t));
-
-    transfer->conn = ngx_get_connection(ipc_ctx->pipefd[1], ngx_cycle->log);
-    transfer->conn->data = transfer;
-
-    wev = transfer->conn->write;
-    wev->handler = ngx_http_video_thumbextractor_extract_process_write_handler;
-
-    if (ngx_add_event(wev, NGX_WRITE_EVENT, 0) != NGX_OK) {
-        ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: failed to add child write event");
-    }
-
-    ngx_http_video_thumbextractor_extract_process_write_handler(wev);
 
     for ( ;; ) {
+        if (ngx_exiting || ngx_quit) {
+            exit(0);
+        }
+
         ngx_process_events_and_timers(cycle);
     }
 }
 
 
 void
-ngx_http_video_thumbextractor_extract_process_read_handler(ngx_event_t *ev)
+ngx_http_video_thumbextractor_extract_process_parent_read_handler(ngx_event_t *ev)
 {
-    ngx_http_video_thumbextractor_ctx_t       *ctx = NULL;
     ngx_http_video_thumbextractor_ipc_t       *ipc_ctx;
     ngx_http_video_thumbextractor_transfer_t  *transfer;
     ngx_connection_t                          *c;
@@ -297,100 +367,87 @@ ngx_http_video_thumbextractor_extract_process_read_handler(ngx_event_t *ev)
 
     c = ev->data;
     ipc_ctx = c->data;
+    transfer = &ipc_ctx->transfer;
+
     r = ipc_ctx->request;
 
     if (r == NULL) {
         ngx_log_debug(NGX_LOG_DEBUG, ngx_cycle->log, 0, "video thumb extractor module: request already gone");
-        goto exit;
+        goto request_gone;
     }
-
-    ctx = ngx_http_get_module_ctx(r, ngx_http_video_thumbextractor_module);
-    if (ctx == NULL) {
-        ngx_log_debug(NGX_LOG_DEBUG, ngx_cycle->log, 0, "video thumb extractor module: null request ctx");
-        goto exit;
-    }
-
-    transfer = &ctx->transfer;
 
     ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, transfer->buffer.start, transfer->buffer.last, 0);
 
-    for ( ;; ) {
-
-        if ((rc = ngx_http_video_thumbextractor_recv(c, ev, &transfer->buffer, transfer->buffer.end - transfer->buffer.start)) != NGX_OK) {
-            goto transfer_failed;
-        }
-
-        switch (transfer->step) {
-        case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_RC:
-            if (transfer->rc == NGX_ERROR) {
-                ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_INTERNAL_SERVER_ERROR);
-                goto exit;
-            }
-
-            if ((transfer->rc == NGX_HTTP_VIDEO_THUMBEXTRACTOR_FILE_NOT_FOUND) || (transfer->rc == NGX_HTTP_VIDEO_THUMBEXTRACTOR_SECOND_NOT_FOUND)) {
-                ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_NOT_FOUND);
-                goto exit;
-            }
-
-            ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) &transfer->size, NULL, sizeof(size_t));
-            transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_LEN;
-            break;
-
-        case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_LEN:
-            if ((transfer->buffer.start = ngx_pcalloc(r->pool, transfer->size)) == NULL) {
-                ngx_log_error(NGX_LOG_CRIT, r->connection->log, 0, "video thumb extractor module: unable to allocate buffer to receive the image");
-                ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_INTERNAL_SERVER_ERROR);
-                goto exit;
-            }
-
-            ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, transfer->buffer.start, NULL, transfer->size);
-            transfer->buffer.temporary = 1;
-
-            transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_DATA;
-            break;
-
-        case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_DATA:
-            transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_FINISHED;
-
-            ngx_http_video_thumbextractor_release_slot(ipc_ctx->slot);
-            ngx_http_video_thumbextractor_module_ensure_extractor_process();
-
-            /* write response */
-            r->headers_out.content_type = NGX_HTTP_VIDEO_THUMBEXTRACTOR_CONTENT_TYPE;
-            r->headers_out.content_type_len = NGX_HTTP_VIDEO_THUMBEXTRACTOR_CONTENT_TYPE.len;
-            r->headers_out.status = NGX_HTTP_OK;
-            r->headers_out.content_length_n = transfer->size;
-
-            out = (ngx_chain_t *) ngx_pcalloc(r->pool, sizeof(ngx_chain_t));
-            if (out == NULL) {
-                ngx_log_error(NGX_LOG_CRIT, r->connection->log, 0, "video thumb extractor module: unable to allocate output to send the image");
-                ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_INTERNAL_SERVER_ERROR);
-                goto exit;
-            }
-
-            transfer->buffer.last_buf = 1;
-            transfer->buffer.last_in_chain = 1;
-            transfer->buffer.flush = 1;
-            transfer->buffer.memory = 1;
-
-            out->buf = &transfer->buffer;
-            out->next = NULL;
-
-            rc = ngx_http_video_thumbextractor_next_header_filter(r);
-            if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) {
-                goto exit;
-            }
-            ngx_http_video_thumbextractor_next_body_filter(r, out);
-            goto exit;
-
-            break;
-
-        default:
-            goto exit;
-            break;
-        }
-
+    if ((rc = ngx_http_video_thumbextractor_recv(c, ev, &transfer->buffer, transfer->buffer.end - transfer->buffer.start)) != NGX_OK) {
+        goto transfer_failed;
     }
+
+    switch (transfer->step) {
+    case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_RC:
+        transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_FINISHED;
+
+        if (transfer->rc == NGX_ERROR) {
+            ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_INTERNAL_SERVER_ERROR);
+            goto exit;
+        }
+
+        if ((transfer->rc == NGX_HTTP_VIDEO_THUMBEXTRACTOR_FILE_NOT_FOUND) || (transfer->rc == NGX_HTTP_VIDEO_THUMBEXTRACTOR_SECOND_NOT_FOUND)) {
+            ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_NOT_FOUND);
+            goto exit;
+        }
+
+        ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) &transfer->size, NULL, sizeof(size_t));
+        transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_LEN;
+        break;
+
+    case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_LEN:
+        if ((transfer->buffer.start = ngx_pcalloc(r->pool, transfer->size)) == NULL) {
+            ngx_log_error(NGX_LOG_CRIT, r->connection->log, 0, "video thumb extractor module: unable to allocate buffer to receive the image");
+            ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_INTERNAL_SERVER_ERROR);
+            goto exit;
+        }
+        transfer->buffer.temporary = 1;
+
+        ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, transfer->buffer.start, NULL, transfer->size);
+        transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_DATA;
+        break;
+
+    case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_DATA:
+        /* write response */
+        r->headers_out.content_type = NGX_HTTP_VIDEO_THUMBEXTRACTOR_CONTENT_TYPE;
+        r->headers_out.content_type_len = NGX_HTTP_VIDEO_THUMBEXTRACTOR_CONTENT_TYPE.len;
+        r->headers_out.status = NGX_HTTP_OK;
+        r->headers_out.content_length_n = transfer->size;
+
+        out = (ngx_chain_t *) ngx_pcalloc(r->pool, sizeof(ngx_chain_t));
+        if (out == NULL) {
+            ngx_log_error(NGX_LOG_CRIT, r->connection->log, 0, "video thumb extractor module: unable to allocate output to send the image");
+            ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_INTERNAL_SERVER_ERROR);
+            goto exit;
+        }
+
+        transfer->buffer.last_buf = 1;
+        transfer->buffer.last_in_chain = 1;
+        transfer->buffer.flush = 1;
+        transfer->buffer.memory = 1;
+
+        out->buf = &transfer->buffer;
+        out->next = NULL;
+
+        rc = ngx_http_video_thumbextractor_next_header_filter(r);
+        if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) {
+            goto exit;
+        }
+        ngx_http_video_thumbextractor_next_body_filter(r, out);
+
+        goto exit;
+        break;
+
+    default:
+        break;
+    }
+
+    return;
 
 transfer_failed:
 
@@ -403,18 +460,17 @@ transfer_failed:
         ngx_http_filter_finalize_request(r, &ngx_http_video_thumbextractor_module, NGX_HTTP_INTERNAL_SERVER_ERROR);
     }
 
+request_gone:
+
+    ngx_http_video_thumbextractor_cleanup_parent_process(ipc_ctx);
+
 exit:
-    ngx_close_connection(c);
+
+    ipc_ctx->processing = 0;
+    ipc_ctx->request = NULL;
 
     if (r != NULL) {
-        if (ctx != NULL) {
-            ctx->slot = -1;
-        }
         ngx_http_finalize_request(r, NGX_OK);
-    }
-
-    if (ngx_http_video_thumbextractor_module_ipc_ctxs[ipc_ctx->slot].request == r) {
-        ngx_http_video_thumbextractor_release_slot(ipc_ctx->slot);
     }
 
     ngx_http_video_thumbextractor_module_ensure_extractor_process();
@@ -422,45 +478,139 @@ exit:
 
 
 void
+ngx_http_video_thumbextractor_extract_process_child_read_handler(ngx_event_t *ev)
+{
+    ngx_http_video_thumbextractor_transfer_t  *transfer = &ngx_http_video_thumbextractor_transfer;
+    ngx_http_video_thumbextractor_thumb_ctx_t *thumb_ctx = transfer->thumb_ctx;
+    ngx_connection_t                          *c;
+    ngx_int_t                                  rc;
+    ngx_event_t                               *wev;
+
+    c = ev->data;
+
+    if (transfer->pool == NULL) {
+        if ((transfer->pool = ngx_create_pool(4096, ngx_cycle->log)) == NULL) {
+            ngx_log_error(NGX_LOG_CRIT, ngx_cycle->log, 0, "video thumb extractor module: unable to allocate temporary pool to extract the thumb");
+            goto allocation_failed;
+        }
+
+        if ((transfer->thumb_ctx = ngx_pcalloc(transfer->pool, sizeof(ngx_http_video_thumbextractor_thumb_ctx_t))) == NULL) {
+            ngx_log_error(NGX_LOG_CRIT, ngx_cycle->log, 0, "video thumb extractor module: unable to allocate temporary thumb context");
+            goto allocation_failed;
+        }
+
+        thumb_ctx = transfer->thumb_ctx;
+        transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_CONTEXT;
+        ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) thumb_ctx, NULL, sizeof(ngx_http_video_thumbextractor_thumb_ctx_t));
+    }
+
+    ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, transfer->buffer.start, transfer->buffer.last, 0);
+
+    if ((rc = ngx_http_video_thumbextractor_recv(c, ev, &transfer->buffer, transfer->buffer.end - transfer->buffer.start)) != NGX_OK) {
+        goto transfer_failed;
+    }
+
+    switch (transfer->step) {
+    case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_CONTEXT:
+        if ((thumb_ctx->filename.data = ngx_pcalloc(transfer->pool, thumb_ctx->filename.len + 1)) == NULL) {
+            ngx_log_error(NGX_LOG_CRIT, ngx_cycle->log, 0, "video thumb extractor module: unable to allocate temporary pool to extract the thumb");
+            goto allocation_failed;
+        }
+        thumb_ctx->filename.data[thumb_ctx->filename.len] = '\0';
+
+        ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, thumb_ctx->filename.data, NULL, thumb_ctx->filename.len);
+        transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_FILENAME;
+        break;
+
+    case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_FILENAME:
+        ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) &transfer->vtlcf, NULL, sizeof(ngx_http_video_thumbextractor_loc_conf_t *));
+        transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_CONFIG;
+        break;
+
+    case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_CONFIG:
+        transfer->data = 0;
+        transfer->size = 0;
+
+        transfer->rc = ngx_http_video_thumbextractor_get_thumb(transfer->vtlcf, thumb_ctx, &transfer->data, &transfer->size, transfer->pool, ngx_cycle->log);
+
+        transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_RC;
+        ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) &transfer->rc, NULL, sizeof(ngx_int_t));
+
+        wev = c->write;
+        wev->handler = ngx_http_video_thumbextractor_extract_process_write_handler;
+
+        if (ngx_add_event(wev, NGX_WRITE_EVENT, 0) != NGX_OK) {
+            ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: failed to add child write event");
+        }
+
+        ngx_http_video_thumbextractor_extract_process_write_handler(wev);
+
+        break;
+
+    default:
+        break;
+    }
+
+    return;
+
+transfer_failed:
+
+    if (rc == NGX_AGAIN) {
+        return;
+    }
+
+    if (rc == NGX_ERROR) {
+        ngx_log_error(NGX_LOG_CRIT, ngx_cycle->log, ngx_errno, "video thumb extractor module: Could not read data from parent !!!");
+    }
+
+allocation_failed:
+
+    rc = NGX_ERROR;
+    ngx_write_fd(c->fd, &rc, sizeof(ngx_int_t));
+    ngx_http_video_thumbextractor_cleanup_extract_process(transfer);
+}
+
+
+void
 ngx_http_video_thumbextractor_extract_process_write_handler(ngx_event_t *ev)
 {
-    ngx_http_video_thumbextractor_transfer_t  *transfer;
+    ngx_http_video_thumbextractor_transfer_t  *transfer = &ngx_http_video_thumbextractor_transfer;
     ngx_connection_t                          *c;
     ngx_int_t                                  rc;
 
     c = ev->data;
-    transfer = c->data;
 
     ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, transfer->buffer.start, transfer->buffer.last, 0);
 
-    for ( ;; ) {
-
-        if ((rc = ngx_http_video_thumbextractor_write(c, ev, &transfer->buffer, transfer->buffer.end - transfer->buffer.start)) != NGX_OK) {
-            goto transfer_failed;
-        }
-
-        switch (transfer->step) {
-        case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_RC:
-            if (transfer->rc == NGX_OK) {
-                ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) &transfer->size, NULL, sizeof(size_t));
-                transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_LEN;
-            } else {
-                goto exit;
-            }
-            break;
-
-        case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_LEN:
-            ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) transfer->data, NULL, transfer->size);
-            transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_DATA;
-            break;
-
-        case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_DATA:
-        default:
-            goto exit;
-            break;
-        }
-
+    if ((rc = ngx_http_video_thumbextractor_write(c, ev, &transfer->buffer, transfer->buffer.end - transfer->buffer.start)) != NGX_OK) {
+        goto transfer_failed;
     }
+
+    switch (transfer->step) {
+    case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_RC:
+        if (transfer->rc == NGX_OK) {
+            ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) &transfer->size, NULL, sizeof(size_t));
+            transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_LEN;
+        } else {
+            transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_FINISHED;
+        }
+        break;
+
+    case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_LEN:
+        ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) transfer->data, NULL, transfer->size);
+        transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_DATA;
+        break;
+
+    case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_IMAGE_DATA:
+    case NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_FINISHED:
+        goto exit;
+        break;
+
+    default:
+        break;
+    }
+
+    return;
 
 transfer_failed:
 
@@ -470,41 +620,63 @@ transfer_failed:
 
 exit:
 
-    ngx_http_video_thumbextractor_cleanup_extract_process(transfer);
-
-    if (rc == NGX_ERROR) {
-        exit(-1);
+    if (ngx_del_event(ev, NGX_WRITE_EVENT, 0) != NGX_OK) {
+        ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: failed to remove parent write event");
     }
 
-    exit(0);
+    ngx_http_video_thumbextractor_cleanup_extract_process(transfer);
+}
+
+
+void
+ngx_http_video_thumbextractor_cleanup_parent_process(ngx_http_video_thumbextractor_ipc_t *ipc_ctx)
+{
+    ngx_http_video_thumbextractor_transfer_t  *transfer = &ipc_ctx->transfer;
+    ngx_event_t                               *wev;
+    u_char                                     trash[1];
+
+    ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, 0, "video thumb extractor module: FORCED CLEANUP, SENDING SIGUSR1");
+
+    // remove write event
+    if (transfer->conn != NULL) {
+        wev = transfer->conn->write;
+        if (wev->active) {
+            if (ngx_del_event(wev, NGX_WRITE_EVENT, 0) != NGX_OK) {
+                ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: failed to remove parent write event");
+            }
+        }
+    }
+
+    kill(ipc_ctx->pid, SIGUSR1);
+
+    // read all pending data
+    while(ngx_read_fd(transfer->conn->fd, trash, 1) == 1) { /* just to flush the socket */ }
+
+    ipc_ctx->processing = 0;
+    ipc_ctx->request = NULL;
 }
 
 
 void
 ngx_http_video_thumbextractor_cleanup_extract_process(ngx_http_video_thumbextractor_transfer_t *transfer)
 {
-    if (ngx_http_video_thumbextractor_transfer == transfer) {
-        ngx_http_video_thumbextractor_transfer = NULL;
-    }
+    ngx_event_t                               *wev;
 
+    // remove write event
     if (transfer->conn != NULL) {
-        ngx_close_connection(transfer->conn);
-        transfer->conn = NULL;
+        wev = transfer->conn->write;
+        if (wev->active) {
+            if (ngx_del_event(wev, NGX_WRITE_EVENT, 0) != NGX_OK) {
+                ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: failed to remove parent write event");
+            }
+        }
     }
 
     if (transfer->pool != NULL) {
         ngx_destroy_pool(transfer->pool);
+        transfer->pool = NULL;
+        transfer->step = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TRANSFER_FINISHED;
     }
-
-    ngx_done_events((ngx_cycle_t *) ngx_cycle);
-}
-
-
-void
-ngx_http_video_thumbextractor_release_slot(ngx_int_t slot)
-{
-    ngx_http_video_thumbextractor_module_ipc_ctxs[slot].pid = -1;
-    ngx_http_video_thumbextractor_module_ipc_ctxs[slot].request = NULL;
 }
 
 
@@ -579,9 +751,28 @@ ngx_http_video_thumbextractor_set_buffer(ngx_buf_t *buf, u_char *start, u_char *
 void
 ngx_http_video_thumbextractor_sig_handler(int signo)
 {
+    ngx_http_video_thumbextractor_transfer_t  *transfer = &ngx_http_video_thumbextractor_transfer;
+    u_char                                     trash[1];
+
+    if ((signo == SIGTERM) || (signo == SIGINT)) {
+        ngx_quit = 1;
+        ngx_http_video_thumbextractor_cleanup_extract_process(transfer);
+        ngx_close_socket(ngx_http_video_thumbextractor_transfer_sockets[0]);
+        ngx_close_socket(ngx_http_video_thumbextractor_transfer_sockets[1]);
+    }
+
     if (signo == SIGTERM) {
-        if (ngx_http_video_thumbextractor_transfer != NULL) {
-            ngx_http_video_thumbextractor_cleanup_extract_process(ngx_http_video_thumbextractor_transfer);
-        }
+        ngx_done_events((ngx_cycle_t *) ngx_cycle);
+    }
+
+    if (signo == SIGUSR1) {
+        // reset state machine
+        ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, 0, "video thumb extractor module: received SIGUSR1");
+
+        // read all pending data
+        while(ngx_read_fd(transfer->conn->fd, trash, 1) == 1) { /* just to flush the socket */ }
+
+        // clear transfer structure
+        ngx_http_video_thumbextractor_cleanup_extract_process(transfer);
     }
 }
