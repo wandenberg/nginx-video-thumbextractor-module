@@ -159,6 +159,7 @@ ngx_http_video_thumbextractor_fork_extract_process(ngx_uint_t slot)
             ngx_http_video_thumbextractor_set_buffer(&transfer->buffer, (u_char *) &transfer->rc, NULL, sizeof(ngx_int_t));
 
             rev = ipc_ctx->conn->read;
+	     rev->log = ngx_cycle->log;
             rev->handler = ngx_http_video_thumbextractor_extract_process_read_handler;
 
             if (ngx_add_event(rev, NGX_READ_EVENT, 0) != NGX_OK) {
@@ -215,6 +216,7 @@ ngx_http_video_thumbextractor_run_extract(ngx_http_video_thumbextractor_ipc_t *i
     cycle->conf_prefix = ngx_cycle->conf_prefix;
 
     cycle->connection_n = 16;
+    cycle->modules = ngx_modules;
 
     ngx_process = NGX_PROCESS_HELPER;
 
@@ -271,6 +273,7 @@ ngx_http_video_thumbextractor_run_extract(ngx_http_video_thumbextractor_ipc_t *i
 
     wev = transfer->conn->write;
     wev->handler = ngx_http_video_thumbextractor_extract_process_write_handler;
+    wev->log = log;
 
     if (ngx_add_event(wev, NGX_WRITE_EVENT, 0) != NGX_OK) {
         ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, ngx_errno, "video thumb extractor module: failed to add child write event");
