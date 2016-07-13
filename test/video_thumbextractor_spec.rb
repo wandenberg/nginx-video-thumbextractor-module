@@ -61,7 +61,7 @@ describe "when getting a thumb" do
       it "should rotate by 90 degrees when asked for" do
         nginx_run_server(only_keyframe: 'off') do
           content = image('/test_video_rotate_90.mp4?second=2&height=56', {}, "200")
-          expect(content).to be_perceptual_equal_to('test_video_rotate_90.jpg')
+          expect(content).to be_perceptual_equal_to('test_video_rotate_90.jpg', 98.3)
         end
       end
 
