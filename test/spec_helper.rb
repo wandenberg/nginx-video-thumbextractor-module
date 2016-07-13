@@ -14,21 +14,21 @@ RSpec.configure do |config|
   config.run_all_when_everything_filtered = true
 end
 
-RSpec::Matchers.define :be_perceptual_equal_to do |expected|
+RSpec::Matchers.define :be_perceptual_equal_to do |expected, accuracy=99|
   match do |actual|
-    (Pixmap.from_jpeg_buffer(actual) - Pixmap.from_jpeg_file(expected)).percentage_pixels_non_zero < 1
+    (Pixmap.from_jpeg_buffer(actual) - Pixmap.from_jpeg_file(expected)).percentage_pixels_non_zero < (100 - accuracy)
   end
 
   failure_message do |actual|
-    "expected that #{actual} would be 99% equals to #{expected}"
+    "expected that #{actual} would be #{accuracy}% equals to #{expected}"
   end
 
   failure_message_when_negated do |actual|
-    "expected that #{actual} would be 99% different from #{expected}"
+    "expected that #{actual} would be #{accuracy}% different from #{expected}"
   end
 
   description do
-    "be 99% equals"
+    "be #{accuracy}% equals"
   end
 end
 
