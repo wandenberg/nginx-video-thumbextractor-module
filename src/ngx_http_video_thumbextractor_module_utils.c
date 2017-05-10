@@ -160,7 +160,8 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     }
 
     // Get a pointer to the codec context for the video stream
-    pCodecCtx = pFormatCtx->streams[videoStream]->codec;
+    pCodecCtx = avcodec_alloc_context3(pCodec);
+    avcodec_parameters_to_context(pCodecCtx, pFormatCtx->streams[videoStream]->codecpar);
 
     AVDictionary *dict = NULL;
     ngx_sprintf((u_char *) value, "%V%Z", &cf->threads);
@@ -232,7 +233,10 @@ exit:
     if (pFrame != NULL) av_frame_free(&pFrame);
 
     // Close the codec
-    if (pCodecCtx != NULL) avcodec_close(pCodecCtx);
+    if (pCodecCtx != NULL) {
+        avcodec_close(pCodecCtx);
+        avcodec_free_context(&pCodecCtx);
+    }
 
     // Close the video file
     if (pFormatCtx != NULL) avformat_close_input(&pFormatCtx);
@@ -606,6 +610,7 @@ int get_frame(ngx_http_video_thumbextractor_loc_conf_t *cf, AVFormatContext *pFo
     AVPacket packet;
     int      frameFinished = 0;
     int      rc;
+    int      decodeStatus;
 
     int64_t second_on_stream_time_base = second * pFormatCtx->streams[videoStream]->time_base.den / pFormatCtx->streams[videoStream]->time_base.num;
 
@@ -624,19 +629,22 @@ int get_frame(ngx_http_video_thumbextractor_loc_conf_t *cf, AVFormatContext *pFo
         // Is this a packet from the video stream?
         if (packet.stream_index == videoStream) {
             // Decode video frame
-            avcodec_decode_video2(pCodecCtx, pFrame, &frameFinished, &packet);
+            if (avcodec_send_packet(pCodecCtx, &packet) == AVERROR(EAGAIN)) continue;
+            if ((decodeStatus = avcodec_receive_frame(pCodecCtx, pFrame)) == AVERROR(EAGAIN)) continue;
             // Did we get a video frame?
-            if (frameFinished) {
+            if (decodeStatus == 0) {
                 rc = NGX_OK;
-                if (!cf->only_keyframe && (pFrame->pkt_pts < second_on_stream_time_base)) {
+                if (!cf->only_keyframe && (pFrame->pts < second_on_stream_time_base)) {
                     frameFinished = 0;
+                } else {
+                    frameFinished = 1;
                 }
             }
         }
         // Free the packet that was allocated by av_read_frame
-        av_free_packet(&packet);
+        av_packet_unref(&packet);
     }
-    av_free_packet(&packet);
+    av_packet_unref(&packet);
 
     return rc;
 }
