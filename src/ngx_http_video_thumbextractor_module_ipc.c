@@ -216,9 +216,7 @@ ngx_http_video_thumbextractor_run_extract(ngx_http_video_thumbextractor_ipc_t *i
     cycle->conf_prefix = ngx_cycle->conf_prefix;
 
     cycle->connection_n = 16;
-#if (nginx_version >= 1009011)
     cycle->modules = ngx_modules;
-#endif
 
     ngx_process = NGX_PROCESS_HELPER;
 
