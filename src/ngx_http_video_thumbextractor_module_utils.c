@@ -430,6 +430,7 @@ int setup_filters(ngx_http_video_thumbextractor_thumb_ctx_t *ctx, AVFormatContex
     char             args[512];
 
     unsigned int     needs_crop = 0;
+    int              crop_x = 0, crop_y = 0;
     float            new_aspect_ratio = 0.0, scale_sws = 0.0, scale_w = 0.0, scale_h = 0.0;
     int              scale_width = 0, scale_height = 0;
 
@@ -517,7 +518,10 @@ int setup_filters(ngx_http_video_thumbextractor_thumb_ctx_t *ctx, AVFormatContex
     }
 
     if (needs_crop) {
-        snprintf(args, sizeof(args), "%d:%d", (int) ctx->width, (int) ctx->height);
+        crop_x = (float) (scale_width - ctx->width) / 2 + 0.5;
+        crop_y = (float) (scale_height - ctx->height) / 2 + 0.5;
+
+        snprintf(args, sizeof(args), "%d:%d:%d:%d", (int) ctx->width, (int) ctx->height, crop_x, crop_y);
         if (avfilter_graph_create_filter(&crop_ctx, avfilter_get_by_name("crop"), NULL, args, NULL, filter_graph) < 0) {
             ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: error initializing crop filter");
             return NGX_ERROR;
