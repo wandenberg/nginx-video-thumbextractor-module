@@ -17,17 +17,17 @@ h1(#requirements). Requirements
 
 This module depends from some libraries (headers and shared objects) which has to be installed before it:
 
-* avformat >= 55.12.100 (last tested version: 55.12.100, 55.33.100, 55.48.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* avcodec >= 55.18.102 (last tested versions: 55.18.102, 55.52.102, 55.69.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* avutil >= 52.38.100 (last tested versions: 52.38.100, 52.66.100, 52.92.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* avfilter >= 3.79.101 (last tested versions: 3.79.101, 4.2.100, 4.11.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* swscale >= 2.3.100 (last tested versions: 2.3.100, 2.5.102, 2.6.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avformat >= 57.56.101 (last tested version: 57.56.101) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avcodec >= 57.64.101 (last tested versions: 57.64.101) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avutil >= 55.34.101 (last tested versions: 55.34.101) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avfilter >= 6.65.100 (last tested versions: 6.65.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* swscale >= 4.2.100 (last tested versions: 4.2.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
 * jpeg - "libjpeg":http://libjpeg.sourceforge.net
 
 
 h1(#recommendation). Recommendation
 
-When installing FFmpeg (last tested versions: 2.0, 2.0.6, 2.2.2, 2.3.2) from source do not forget to enable shared libraries using _--enable-shared_
+When installing FFmpeg (last tested versions: 3.2.4) from source do not forget to enable shared libraries using _--enable-shared_
 
 If you don't install FFmpeg from source you need to be sure that you have headers files for the libs.
 
@@ -47,12 +47,12 @@ Install the above requirements and follow the steps bellow.
     git clone https://github.com/wandenberg/nginx-video-thumbextractor-module.git
     NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH=$PWD/nginx-video-thumbextractor-module
 
-    # get desired nginx version (tested with 1.0.x series)
-    wget http://nginx.org/download/nginx-1.0.10.tar.gz
+    # get desired nginx version (tested with 1.10.x series)
+    wget http://nginx.org/download/nginx-1.10.0.tar.gz
 
     # unpack, configure and build
-    tar xzvf nginx-1.0.10.tar.gz
-    cd nginx-1.0.10
+    tar xzvf nginx-1.10.0.tar.gz
+    cd nginx-1.10.0
     # configure nginx
     ./configure --add-module=$NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH
     make
@@ -62,7 +62,7 @@ Install the above requirements and follow the steps bellow.
 
     # check
     sudo /usr/local/nginx/sbin/nginx -v
-        nginx version: nginx/1.0.10
+        nginx version: nginx/1.10.0
 
     # test configuration
     sudo /usr/local/nginx/sbin/nginx -c $NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH/nginx.conf -t
@@ -366,6 +366,12 @@ h1(#contributors). Contributors
 
 
 h1(#changelog). Changelog
+
+h2(#0_9_0). v0.9.0
+* drop support to versions prior Nginx 1.10.0 and FFmpeg libraries prior to 3.2.4
+
+h2(#0_8_0). v0.8.0
+* add support to use dynamic values on tile configurations
 
 h2(#0_7_0). v0.7.0
 
