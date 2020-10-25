@@ -256,8 +256,6 @@ exit:
 static void
 ngx_http_video_thumbextractor_init_libraries(void)
 {
-    // Register all formats and codecs
-    avfilter_register_all();
     av_log_set_level(AV_LOG_ERROR);
 }
 
