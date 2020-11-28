@@ -257,8 +257,12 @@ static void
 ngx_http_video_thumbextractor_init_libraries(void)
 {
     // Register all formats and codecs
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 10, 100)
     av_register_all();
+#endif
+#if LIBAVFILTER_VERSION_INT < AV_VERSION_INT(7, 14, 100)
     avfilter_register_all();
+#endif
     av_log_set_level(AV_LOG_ERROR);
 }
 
