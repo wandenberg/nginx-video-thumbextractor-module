@@ -17,17 +17,17 @@ h1(#requirements). Requirements
 
 This module depends from some libraries (headers and shared objects) which has to be installed before it:
 
-* avformat >= 57.56.101 (last tested version: 57.56.101) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* avcodec >= 57.64.101 (last tested versions: 57.64.101) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* avutil >= 55.34.101 (last tested versions: 55.34.101) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* avfilter >= 6.65.100 (last tested versions: 6.65.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
-* swscale >= 4.2.100 (last tested versions: 4.2.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avformat >= 57.56.101 (last tested version: 58.12.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avcodec >= 57.64.101 (last tested versions: 58.18.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avutil >= 55.34.101 (last tested versions: 56.14.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* avfilter >= 6.65.100 (last tested versions: 7.16.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
+* swscale >= 4.2.100 (last tested versions: 5.1.100) - commonly distributed with "FFmpeg":http://ffmpeg.org
 * jpeg - "libjpeg":http://libjpeg.sourceforge.net
 
 
 h1(#recommendation). Recommendation
 
-When installing FFmpeg (last tested versions: 3.2.4) from source do not forget to enable shared libraries using _--enable-shared_
+When installing FFmpeg (last tested versions: 4.0.6) from source do not forget to enable shared libraries using _--enable-shared_
 
 If you don't install FFmpeg from source you need to be sure that you have headers files for the libs.
 
@@ -47,12 +47,12 @@ Install the above requirements and follow the steps bellow.
     git clone https://github.com/wandenberg/nginx-video-thumbextractor-module.git
     NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH=$PWD/nginx-video-thumbextractor-module
 
-    # get desired nginx version (tested with 1.10.x series)
-    wget http://nginx.org/download/nginx-1.10.0.tar.gz
+    # get desired nginx version (tested with 1.18.x series)
+    wget http://nginx.org/download/nginx-1.18.0.tar.gz
 
     # unpack, configure and build
-    tar xzvf nginx-1.10.0.tar.gz
-    cd nginx-1.10.0
+    tar xzvf nginx-1.18.0.tar.gz
+    cd nginx-1.18.0
     # configure nginx
     ./configure --add-module=$NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH
     make
@@ -62,7 +62,7 @@ Install the above requirements and follow the steps bellow.
 
     # check
     sudo /usr/local/nginx/sbin/nginx -v
-        nginx version: nginx/1.10.0
+        nginx version: nginx/1.18.0
 
     # test configuration
     sudo /usr/local/nginx/sbin/nginx -c $NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH/nginx.conf -t
