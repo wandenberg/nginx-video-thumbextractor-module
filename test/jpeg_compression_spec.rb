@@ -22,7 +22,7 @@ describe "when compressing an image" do
   end
 
   it "should return a different image from default when change jpeg_smooth directive" do
-    nginx_run_server(jpeg_smooth: 1) do
+    nginx_run_server(jpeg_smooth: 2) do
       expect(image('/test_video.mp4?second=2')).not_to eq(default_image)
     end
   end
