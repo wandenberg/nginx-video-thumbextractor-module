@@ -27,7 +27,9 @@ This module depends from some libraries (headers and shared objects) which has t
 
 h1(#recommendation). Recommendation
 
-When installing FFmpeg (last tested versions: 4.0.6) from source do not forget to enable shared libraries using _--enable-shared_
+When installing FFmpeg (last tested versions: 4.0.6) from source do not forget to enable shared libraries using
+
+pre. --enable-shared
 
 If you don't install FFmpeg from source you need to be sure that you have headers files for the libs.
 
@@ -43,47 +45,47 @@ h1(#installation). Installation
 Install the above requirements and follow the steps bellow.
 
 <pre>
-    # clone the project
-    git clone https://github.com/wandenberg/nginx-video-thumbextractor-module.git
-    NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH=$PWD/nginx-video-thumbextractor-module
+# clone the project
+git clone https://github.com/wandenberg/nginx-video-thumbextractor-module.git
+NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH=$PWD/nginx-video-thumbextractor-module
 
-    # get desired nginx version (tested with 1.18.x series)
-    wget http://nginx.org/download/nginx-1.18.0.tar.gz
+# get desired nginx version (tested with 1.18.x series)
+wget http://nginx.org/download/nginx-1.18.0.tar.gz
 
-    # unpack, configure and build
-    tar xzvf nginx-1.18.0.tar.gz
-    cd nginx-1.18.0
-    # configure nginx
-    ./configure --add-module=$NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH
-    make
+# unpack, configure and build
+tar xzvf nginx-1.18.0.tar.gz
+cd nginx-1.18.0
+# configure nginx
+./configure --add-module=$NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH
+make
 
-    # install and finish
-    sudo make install
+# install and finish
+sudo make install
 
-    # check
-    sudo /usr/local/nginx/sbin/nginx -v
-        nginx version: nginx/1.18.0
+# check
+sudo /usr/local/nginx/sbin/nginx -v
+  nginx version: nginx/1.18.0
 
-    # test configuration
-    sudo /usr/local/nginx/sbin/nginx -c $NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH/nginx.conf -t
-        the configuration file $NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH/nginx.conf syntax is ok
-        configuration file $NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH/nginx.conf test is successful
+# test configuration
+sudo /usr/local/nginx/sbin/nginx -c $NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH/nginx.conf -t
+  the configuration file $NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH/nginx.conf syntax is ok
+  configuration file $NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH/nginx.conf test is successful
 
-    # run
-    sudo /usr/local/nginx/sbin/nginx -c $NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH/nginx.conf
+# run
+sudo /usr/local/nginx/sbin/nginx -c $NGINX_VIDEO_THUMBEXTRACTOR_MODULE_PATH/nginx.conf
 </pre>
 
 
 h1(#basic-configuration). Basic Configuration
 
 <pre>
-    location ~ /thumbs(.*) {
-        video_thumbextractor;
-        video_thumbextractor_video_filename    $1;
-        video_thumbextractor_video_second      $arg_second;
-        video_thumbextractor_image_width       $arg_width;
-        video_thumbextractor_image_height      $arg_height;
-    }
+location ~ /thumbs(.*) {
+  video_thumbextractor;
+  video_thumbextractor_video_filename    $1;
+  video_thumbextractor_video_second      $arg_second;
+  video_thumbextractor_image_width       $arg_width;
+  video_thumbextractor_image_height      $arg_height;
+}
 </pre>
 
 
@@ -92,14 +94,14 @@ h1(#basic-usage). Basic Usage
 Assuming that you have a file called _video.mp4_ on your root folder use a browser to test the following urls:
 
 <pre>
-  # get an image from second 10 with the original size
-  http://localhost/thumbs/video.mp4?second=10
+# get an image from second 10 with the original size
+http://localhost/thumbs/video.mp4?second=10
 
-  # get an image from second 20 with a 50px of height and proportional width keeping video scale
-  http://localhost/thumbs/video.mp4?second=10&height=50
+# get an image from second 20 with a 50px of height and proportional width keeping video scale
+http://localhost/thumbs/video.mp4?second=10&height=50
 
-  # get an image from second 30 with a 50px of height and 100px of width, the image will be cropped to keep video scale
-  http://localhost/thumbs/video.mp4?second=20&height=50&width=100
+# get an image from second 30 with a 50px of height and 100px of width, the image will be cropped to keep video scale
+http://localhost/thumbs/video.mp4?second=20&height=50&width=100
 </pre>
 
 
@@ -109,9 +111,7 @@ h1(#directives). Directives
 h2(#video_thumbextractor). video_thumbextractor
 
 *syntax:* _video_thumbextractor_
-
 *context:* _location_
-
 *release version:* _0.1.0_
 
 Set Video Thumb Extractor as the request handler for the location.
@@ -120,11 +120,8 @@ Set Video Thumb Extractor as the request handler for the location.
 h2(#video_thumbextractor_video_filename). video_thumbextractor_video_filename
 
 *syntax:* _video_thumbextractor_video_filename filename_
-
 *default:* _none_
-
 *context:* _http_
-
 *release version:* _0.1.0_
 
 The video filename relative to root folder.
@@ -135,11 +132,8 @@ Return a 404 if the video is not found.
 h2(#video_thumbextractor_video_second). video_thumbextractor_video_second
 
 *syntax:* _video_thumbextractor_video_second second_
-
 *default:* _none_
-
 *context:* _http_
-
 *release version:* _0.1.0_
 
 The time in seconds where the image should be extracted. The nearest key frame will be used to get the image.
@@ -151,11 +145,8 @@ Return a 404 if the second is not found (the video is shorter than the time spec
 h2(#video_thumbextractor_image_width). video_thumbextractor_image_width
 
 *syntax:* _video_thumbextractor_image_width width_
-
 *default:* _0_
-
 *context:* _http_
-
 *release version:* _0.1.0_
 
 The width used to generate the image.
@@ -166,11 +157,8 @@ If only the width is specified the video size will be used as image size.
 h2(#video_thumbextractor_image_height). video_thumbextractor_image_height
 
 *syntax:* _video_thumbextractor_image_height height_
-
 *default:* _0_
-
 *context:* _http_
-
 *release version:* _0.1.0_
 
 The height used to generate the image.
@@ -182,11 +170,8 @@ If both, width and height, are specified the image will suffers a resize and an 
 h2(#video_thumbextractor_only_keyframe). video_thumbextractor_only_keyframe
 
 *syntax:* _video_thumbextractor_only_keyframe on|off_
-
 *default:* _on_
-
 *context:* _http_
-
 *release version:* _0.3.0_
 
 Set if only the keyframes should be used to create the image.
@@ -196,11 +181,8 @@ When set to off, the process will be a bit slower because the video will be deco
 h2(#video_thumbextractor_next_time). video_thumbextractor_next_time
 
 *syntax:* _video_thumbextractor_next_time on|off_
-
 *default:* _on_
-
 *context:* _http_
-
 *release version:* _0.3.0_
 
 Set if will use the previous or the next keyframe considering the requested time when configured to use only the keyframes.
@@ -209,11 +191,8 @@ Set if will use the previous or the next keyframe considering the requested time
 h2(#video_thumbextractor_tile_rows). video_thumbextractor_tile_rows
 
 *syntax:* _video_thumbextractor_tile_rows number_
-
 *default:* _none_
-
 *context:* _http_
-
 *release version:* _0.6.0_
 
 Set the number of rows to be used on tile filter. The number of cols will be calculated using the sample interval, the video duration and the start time used on 'video_second' directive, if not set.
@@ -224,11 +203,8 @@ Set the number of rows to be used on tile filter. The number of cols will be cal
 h2(#video_thumbextractor_tile_cols). video_thumbextractor_tile_cols
 
 *syntax:* _video_thumbextractor_tile_cols number_
-
 *default:* _none_
-
 *context:* _http_
-
 *release version:* _0.6.0_
 
 Set the number of cols to be used on tile filter. The number of rows will be calculated using the sample interval, the video duration and the start time used on 'video_second' directive, if not set.
@@ -239,11 +215,8 @@ Set the number of cols to be used on tile filter. The number of rows will be cal
 h2(#video_thumbextractor_tile_max_rows). video_thumbextractor_tile_max_rows
 
 *syntax:* _video_thumbextractor_tile_max_rows number_
-
 *default:* _none_
-
 *context:* _http_
-
 *release version:* _0.6.0_
 
 Set the max number of rows to be used on tile filter when only the number of cols was set. After calculate the number of necessary rows it can be limited by the configured max number of rows.
@@ -254,11 +227,8 @@ Set the max number of rows to be used on tile filter when only the number of col
 h2(#video_thumbextractor_tile_max_cols). video_thumbextractor_tile_max_cols
 
 *syntax:* _video_thumbextractor_tile_max_cols number_
-
 *default:* _none_
-
 *context:* _http_
-
 *release version:* _0.6.0_
 
 Set the max number of cols to be used on tile filter when only the number of rows was set. After calculate the number of necessary cols it can be limited by the configured max number of cols.
@@ -269,11 +239,8 @@ Set the max number of cols to be used on tile filter when only the number of row
 h2(#video_thumbextractor_tile_sample_interval). video_thumbextractor_tile_sample_interval
 
 *syntax:* _video_thumbextractor_tile_sample_interval number_
-
 *default:* _none_
-
 *context:* _http_
-
 *release version:* _0.6.0_
 
 Set the sample interval to get the frames for tile. When it was not set and the number of cols and rows were, the sample interval will be calculated to the video can fit on the tile layout.
@@ -292,11 +259,8 @@ To the interval be respected you should set video_thumbextractor_only_keyframe d
 h2(#video_thumbextractor_tile_color). video_thumbextractor_tile_color
 
 *syntax:* _video_thumbextractor_tile_color string_
-
 *default:* _none_
-
 *context:* _http_
-
 *release version:* _0.6.0_
 
 Set the color to be used on the background. Valid values are defined "here":https://ffmpeg.org/ffmpeg-utils.html#Color
@@ -307,11 +271,8 @@ Set the color to be used on the background. Valid values are defined "here":http
 h2(#video_thumbextractor_tile_margin). video_thumbextractor_tile_margin
 
 *syntax:* _video_thumbextractor_tile_margin number_
-
 *default:* _none_
-
 *context:* _http_
-
 *release version:* _0.6.0_
 
 Set the size of the margin to be used on the final image.
@@ -322,11 +283,8 @@ Set the size of the margin to be used on the final image.
 h2(#video_thumbextractor_tile_padding). video_thumbextractor_tile_padding
 
 *syntax:* _video_thumbextractor_tile_padding number_
-
 *default:* _none_
-
 *context:* _http_
-
 *release version:* _0.6.0_
 
 Set the size of the padding to be used between the frames.
@@ -337,11 +295,8 @@ Set the size of the padding to be used between the frames.
 h2(#video_thumbextractor_threads). video_thumbextractor_threads
 
 *syntax:* _video_thumbextractor_threads string_
-
 *default:* _auto_
-
 *context:* _http_
-
 *release version:* _0.6.0_
 
 Set the number of threads used by avcodec.
@@ -350,11 +305,8 @@ Set the number of threads used by avcodec.
 h2(#video_thumbextractor_processes_per_worker). video_thumbextractor_processes_per_worker
 
 *syntax:* _video_thumbextractor_processes_per_worker number_
-
 *default:* _1_
-
 *context:* _http_
-
 *release version:* _0.7.0_
 
 Set the number of process each nginx worker can fork to extract the thumbs. The requests will be queued until there is an available process.
