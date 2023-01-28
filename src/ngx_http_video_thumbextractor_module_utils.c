@@ -24,11 +24,13 @@
  *
  */
 #include <ngx_http_video_thumbextractor_module_utils.h>
+#include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
 #include <libavfilter/avfilter.h>
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
+#include <libavutil/display.h>
 #include <jpeglib.h>
 
 #define NGX_HTTP_VIDEO_THUMBEXTRACTOR_BUFFER_SIZE 1024 * 8
@@ -82,7 +84,11 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
     int              rc, ret, videoStream;
     AVFormatContext *pFormatCtx = NULL;
     AVCodecContext  *pCodecCtx = NULL;
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(59, 16, 100)
     AVCodec         *pCodec = NULL;
+#else
+    const AVCodec   *pCodec = NULL;
+#endif
     AVFrame         *pFrame = NULL;
     size_t           uncompressed_size;
     unsigned char   *bufferAVIO = NULL;
@@ -443,12 +449,22 @@ int setup_filters(ngx_http_video_thumbextractor_thumb_ctx_t *ctx, AVFormatContex
     int              scale_width = 0, scale_height = 0;
 
     unsigned int     rotate90 = 0, rotate180 = 0, rotate270 = 0;
+    int              rotate_value = 0;
 
     AVDictionaryEntry *rotate = av_dict_get(pFormatCtx->streams[videoStream]->metadata, "rotate", NULL, 0);
     if (rotate) {
-        rotate90 = strcasecmp(rotate->value, "90") == 0;
-        rotate180 = strcasecmp(rotate->value, "180") == 0;
-        rotate270 = strcasecmp(rotate->value, "270") == 0;
+        rotate_value = ngx_atoi((u_char *) rotate->value, ngx_strlen(rotate->value));
+    } else {
+        int32_t *displaymatrix = (int32_t *) av_stream_get_side_data(pFormatCtx->streams[videoStream], AV_PKT_DATA_DISPLAYMATRIX, NULL);
+        if (displaymatrix) {
+            rotate_value = -1 * av_display_rotation_get(displaymatrix);
+        }
+    }
+
+    if (rotate_value) {
+        rotate90 = rotate_value == 90;
+        rotate180 = rotate_value == 180 || rotate_value == -180;
+        rotate270 = rotate_value == 270 || rotate_value == -90;
     }
 
     float aspect_ratio = display_aspect_ratio(pCodecCtx);
@@ -554,7 +570,7 @@ int setup_filters(ngx_http_video_thumbextractor_thumb_ctx_t *ctx, AVFormatContex
     }
 
     // connect inputs and outputs
-    if (rotate) {
+    if (rotate_value) {
         rc = avfilter_link(*buffersrc_ctx, 0, transpose_ctx, 0);
         if (rotate180) {
             if (rc >= 0) rc = avfilter_link(transpose_ctx, 0, transpose_cw_ctx, 0);
