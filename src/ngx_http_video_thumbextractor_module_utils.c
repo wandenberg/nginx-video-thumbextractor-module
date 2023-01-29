@@ -431,14 +431,14 @@ int setup_parameters(ngx_http_video_thumbextractor_loc_conf_t *cf, ngx_http_vide
 
 int setup_filters(ngx_http_video_thumbextractor_thumb_ctx_t *ctx, AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx, int videoStream, AVFilterGraph **fg, AVFilterContext **buffersrc_ctx, AVFilterContext **buffersink_ctx, ngx_log_t *log)
 {
-    AVFilterGraph   *filter_graph;
+    AVFilterGraph   *filter_graph = NULL;
 
-    AVFilterContext *transpose_ctx;
-    AVFilterContext *transpose_cw_ctx;
-    AVFilterContext *scale_ctx;
-    AVFilterContext *crop_ctx;
-    AVFilterContext *tile_ctx;
-    AVFilterContext *format_ctx;
+    AVFilterContext *transpose_ctx = NULL;
+    AVFilterContext *transpose_cw_ctx = NULL;
+    AVFilterContext *scale_ctx = NULL;
+    AVFilterContext *crop_ctx = NULL;
+    AVFilterContext *tile_ctx = NULL;
+    AVFilterContext *format_ctx = NULL;
 
     int              rc = 0;
     char             args[512];
