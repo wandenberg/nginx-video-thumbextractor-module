@@ -59,6 +59,8 @@ typedef struct {
     ngx_flag_t                              only_keyframe;
     ngx_flag_t                              next_time;
 
+    ngx_flag_t                              tile_vtt;
+
     ngx_str_t                               threads;
 
     ngx_flag_t                              enabled;
@@ -83,6 +85,7 @@ typedef struct {
     ngx_int_t                                   tile_margin;
     ngx_int_t                                   tile_padding;
     ngx_str_t                                   tile_color;
+    ngx_flag_t                                  tile_vtt;
     ngx_str_t                                   filename;
 } ngx_http_video_thumbextractor_thumb_ctx_t;
 
@@ -117,6 +120,7 @@ ngx_int_t ngx_http_video_thumbextractor_filter_init(ngx_conf_t *cf);
 
 
 static ngx_str_t NGX_HTTP_VIDEO_THUMBEXTRACTOR_CONTENT_TYPE = ngx_string("image/jpeg");
+static ngx_str_t NGX_HTTP_VIDEO_THUMBEXTRACTOR_TEXT_VTT_CONTENT_TYPE = ngx_string("text/vtt");
 
 #define NGX_HTTP_VIDEO_THUMBEXTRACTOR_PARSE_VARIABLE_VALUE_INT(conf_complex, variable, integer, default_value)  \
     if (conf_complex != NULL) {                                                                                 \

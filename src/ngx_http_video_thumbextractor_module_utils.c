@@ -193,6 +193,23 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
         goto exit;
     }
 
+    u_char *vtt_buf, *vtt_buf_cur;
+    size_t vtt_buf_size = (pFormatCtx->duration / AV_TIME_BASE / ctx->tile_sample_interval) * (50+100); // 50 symbols for timeframe, 100 symbols for storyboard link and coordinates
+    vtt_buf = ngx_palloc(temp_pool, vtt_buf_size);
+    if (vtt_buf == NULL) {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "video thumb extractor module: Could not alloc vtt memory");
+        goto exit;
+    }
+
+    vtt_buf_cur = vtt_buf;
+    vtt_buf_cur = ngx_snprintf(vtt_buf_cur, vtt_buf_size - (vtt_buf_cur - vtt_buf), "WEBVTT\n");
+
+    int64_t finishCueSecond;
+    int64_t startCueHours, startCueMinutes, startCueSeconds;
+    int64_t finishCueHours, finishCueMinutes, finishCueSeconds;
+    int64_t cur_tile_row = 1, cur_tile_col = 1;
+
+
     while ((rc = get_frame(cf, pFormatCtx, pCodecCtx, pFrame, videoStream, second, log)) == 0) {
         if (pFrame->pict_type == AV_PICTURE_TYPE_NONE) {
             need_flush = 1;
@@ -200,6 +217,24 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
         }
 
         if (filter_frame(buffersrc_ctx, buffersink_ctx, pFrame, pFrame, log) == AVERROR(EAGAIN)) {
+            finishCueSecond = second + ctx->tile_sample_interval;
+            startCueHours = second / 3600;
+            startCueMinutes = (second - startCueHours * 3600) / 60;
+            startCueSeconds = second - startCueHours * 3600 - startCueMinutes * 60;
+            finishCueHours = finishCueSecond / 3600;
+            finishCueMinutes = (finishCueSecond - finishCueHours * 3600) / 60;
+            finishCueSeconds = finishCueSecond - finishCueHours * 3600 - finishCueMinutes * 60;
+
+            vtt_buf_cur = ngx_snprintf(vtt_buf_cur, vtt_buf_size - (vtt_buf_cur - vtt_buf), "\n");
+            vtt_buf_cur = ngx_snprintf(vtt_buf_cur, vtt_buf_size - (vtt_buf_cur - vtt_buf), "%02d:%02d:%02d.000 --> %02d:%02d:%02d.000\n", startCueHours, startCueMinutes, startCueSeconds, finishCueHours, finishCueMinutes, finishCueSeconds);
+            vtt_buf_cur = ngx_snprintf(vtt_buf_cur, vtt_buf_size - (vtt_buf_cur - vtt_buf), "storyboard.jpg#xywh=%d,%d,%d,%d\n", (cur_tile_col-1)*ctx->width, (cur_tile_row-1)*ctx->height, ctx->width, ctx->height);
+
+            cur_tile_col++;
+            if (cur_tile_col > ctx->tile_cols) {
+                cur_tile_col = 1;
+                cur_tile_row++;
+            }
+
             second += ctx->tile_sample_interval;
             need_flush = 1;
             continue;
@@ -219,10 +254,16 @@ ngx_http_video_thumbextractor_get_thumb(ngx_http_video_thumbextractor_loc_conf_t
 
 
     if (rc == NGX_OK) {
-        // Convert the image from its native format to JPEG
-        uncompressed_size = pFrame->width * pFrame->height * 3;
-        if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrame->data[0], pFrame->linesize[0], pFrame->width, pFrame->height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
+        if (cf->tile_vtt) {
+            *out_buffer = (caddr_t)vtt_buf;
+            *out_len = vtt_buf_cur - vtt_buf;
             rc = NGX_OK;
+        } else {
+            // Convert the image from its native format to JPEG
+            uncompressed_size = pFrame->width * pFrame->height * 3;
+            if (ngx_http_video_thumbextractor_jpeg_compress(cf, pFrame->data[0], pFrame->linesize[0], pFrame->width, pFrame->height, out_buffer, out_len, uncompressed_size, temp_pool) == 0) {
+                rc = NGX_OK;
+            }
         }
     }
 

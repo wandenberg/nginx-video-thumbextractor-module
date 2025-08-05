@@ -359,8 +359,13 @@ ngx_http_video_thumbextractor_extract_process_read_handler(ngx_event_t *ev)
             ngx_http_video_thumbextractor_module_ensure_extractor_process();
 
             /* write response */
-            r->headers_out.content_type = NGX_HTTP_VIDEO_THUMBEXTRACTOR_CONTENT_TYPE;
-            r->headers_out.content_type_len = NGX_HTTP_VIDEO_THUMBEXTRACTOR_CONTENT_TYPE.len;
+            if ((&ctx->thumb_ctx)->tile_vtt) {
+                r->headers_out.content_type = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TEXT_VTT_CONTENT_TYPE;
+                r->headers_out.content_type_len = NGX_HTTP_VIDEO_THUMBEXTRACTOR_TEXT_VTT_CONTENT_TYPE.len;
+            } else {
+                r->headers_out.content_type = NGX_HTTP_VIDEO_THUMBEXTRACTOR_CONTENT_TYPE;
+                r->headers_out.content_type_len = NGX_HTTP_VIDEO_THUMBEXTRACTOR_CONTENT_TYPE.len;
+            }
             r->headers_out.status = NGX_HTTP_OK;
             r->headers_out.content_length_n = transfer->size;
 

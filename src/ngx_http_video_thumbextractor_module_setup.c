@@ -77,6 +77,12 @@ static ngx_command_t  ngx_http_video_thumbextractor_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_video_thumbextractor_loc_conf_t, next_time),
       NULL },
+    { ngx_string("video_thumbextractor_tile_vtt"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_video_thumbextractor_loc_conf_t, tile_vtt),
+      NULL },
     { ngx_string("video_thumbextractor_image_width"),
       NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_http_set_complex_value_slot,
@@ -282,6 +288,7 @@ ngx_http_video_thumbextractor_create_loc_conf(ngx_conf_t *cf)
     conf->jpeg_dpi = NGX_CONF_UNSET_UINT;
     conf->only_keyframe = NGX_CONF_UNSET_UINT;
     conf->next_time = NGX_CONF_UNSET_UINT;
+    conf->tile_vtt = NGX_CONF_UNSET_UINT;
     ngx_str_null(&conf->threads);
 
     return conf;
@@ -318,6 +325,7 @@ ngx_http_video_thumbextractor_merge_loc_conf(ngx_conf_t *cf, void *parent, void 
 
     ngx_conf_merge_value(conf->only_keyframe, prev->only_keyframe, 1);
     ngx_conf_merge_value(conf->next_time, prev->next_time, 1);
+    ngx_conf_merge_value(conf->tile_vtt, prev->tile_vtt, 0);
 
     ngx_conf_merge_str_value(conf->threads, prev->threads, "auto");
 

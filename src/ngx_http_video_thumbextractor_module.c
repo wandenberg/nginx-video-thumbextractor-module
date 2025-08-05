@@ -207,6 +207,7 @@ ngx_http_video_thumbextractor_set_request_context(ngx_http_request_t *r)
     NGX_HTTP_VIDEO_THUMBEXTRACTOR_PARSE_VARIABLE_VALUE_INT(vtlcf->tile_margin, vv_value, thumb_ctx->tile_margin, 0);
     NGX_HTTP_VIDEO_THUMBEXTRACTOR_PARSE_VARIABLE_VALUE_INT(vtlcf->tile_padding, vv_value, thumb_ctx->tile_padding, 0);
     thumb_ctx->tile_color = vtlcf->tile_color;
+    thumb_ctx->tile_vtt = vtlcf->tile_vtt;
 
     if (((thumb_ctx->width > 0) && (thumb_ctx->width < 16)) || ((thumb_ctx->height > 0) && (thumb_ctx->height < 16))) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "video thumb extractor module: Very small size requested, %d x %d", thumb_ctx->width, thumb_ctx->height);

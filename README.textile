@@ -292,6 +292,16 @@ Set the size of the padding to be used between the frames.
 !test/test_video_2_cols_2_rows_3_padding.jpg(using 3px of padding)!
 
 
+h2(#video_thumbextractor_tile_vtt). video_thumbextractor_tile_vtt
+
+*syntax:* _video_thumbextractor_tile_vtt on|off_
+*default:* _off_
+*context:* _http_
+*release version:* _1.1.0_
+
+Set tile mode to generate vtt file with cue frames and links to story board(storyboard.jpg is used as a storyboard file name).
+
+
 h2(#video_thumbextractor_threads). video_thumbextractor_threads
 
 *syntax:* _video_thumbextractor_threads string_
@@ -318,6 +328,9 @@ h1(#contributors). Contributors
 
 
 h1(#changelog). Changelog
+
+h2(#0_9_0). v1.1.0
+* add support to tile vtt, used to make story boards
 
 h2(#0_9_0). v0.9.0
 * drop support to versions prior Nginx 1.10.0 and FFmpeg libraries prior to 3.2.4
